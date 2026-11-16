@@ -25,7 +25,7 @@ import { buildGate } from './world/gate.js';
 import { Visitors } from './characters/visitors.js';
 import { Delivery } from './world/delivery.js';
 import { GolfCart } from './world/cart.js';
-import { ModMenu } from './mods.js';
+import { DEFAULT_MODS } from './modDefaults.js';
 import { buildAnimals } from './world/animals.js';
 import { PlayerHealth } from './health.js';
 
@@ -54,6 +54,7 @@ const game = {
   pickables: [], // objects the crosshair raycast can hit
   links: [], // { body, object } pairs synced after each physics step
   uniforms: { time: { value: 0 } },
+  mods: { ...DEFAULT_MODS },
   mode: 'menu', // menu | play | computer | resuming | feedback
   version: '0.8.0',
   time: 0,
@@ -86,7 +87,11 @@ game.friends = [
   new Friend(game, { look: LOOKS[3], x: ATM.x - 2.2, z: ATM.z - 1.5, yaw: -Math.PI / 2 }),
 ];
 spawnStarterItems(game);
-game.modMenu = new ModMenu(game);
+// Tab: mod menu. Owner builds only (the page sets window.ZOO_OWNER); the public site ships without mods.js.
+if (window.ZOO_OWNER) {
+  const { ModMenu } = await import('./mods.js');
+  game.modMenu = new ModMenu(game);
+}
 game.health = new PlayerHealth(game);
 await buildAnimals(game);
 game.visitors = new Visitors(game);
@@ -194,7 +199,7 @@ function frame(now) {
   if (game.mode === 'computer') game.computer.updateCamera(dt);
   else player.postStep(running ? dt : 0);
   game.env.update(dt);
-  game.modMenu.update(dt);
+  game.modMenu?.update(dt);
 
   game.hands.update(dt, {
     visible: game.mods.hands && !player.driving && (game.mode === 'play' || game.mode === 'resuming'),

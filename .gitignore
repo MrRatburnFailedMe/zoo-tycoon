@@ -8,3 +8,5 @@ tools/
 .vercel
 .DS_Store
 .claude/
+src/mods.js
+owner/

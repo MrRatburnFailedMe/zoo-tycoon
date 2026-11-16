@@ -18,6 +18,5 @@ Then open http://localhost:5173.
 - Hold the left mouse button to carry things, let go to drop, right-click to throw
 - E to interact (computers, the ATM, the golf cart, handing tickets to visitors)
 - F to use what you're holding
-- Tab for the mod menu
 
 Model credits are in [CREDITS.md](CREDITS.md).

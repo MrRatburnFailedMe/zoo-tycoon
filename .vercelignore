@@ -4,3 +4,5 @@ FEEDBACK.md
 tools
 *.mp4
 .claude
+src/mods.js
+owner
