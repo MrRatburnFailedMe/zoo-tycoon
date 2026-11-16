@@ -1,0 +1,10 @@
+# private claude.ai build and its feedback system (not part of the public game)
+publish/
+src/feedback.js
+FEEDBACK.md
+# dev-only
+tools/
+*.mp4
+.vercel
+.DS_Store
+.claude/

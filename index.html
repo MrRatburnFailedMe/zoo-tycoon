@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zoo Tycoon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="src/style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div id="crosshair"></div>
+    <div id="vignette"></div>
+    <div id="hurt"></div>
+    <div id="hp"><div id="hpfill"></div></div>
+  </div>
+  <div id="ko"></div>
+
+  <div id="menu">
+    <div class="menu-card">
+      <h1>ZOO<span>TYCOON</span></h1>
+      <button id="play">Click to play</button>
+    </div>
+  </div>
+
+  <div id="computer"></div>
+  <div id="loading"><div></div></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
