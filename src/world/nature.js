@@ -207,7 +207,7 @@ function buildGrass(game, rand) {
     if (Math.hypot(x - PENGUIN.x, z - PENGUIN.z) < PENGUIN.r + 0.6) continue; // ice, not lawn
     if (Math.abs(Math.hypot(x - GORILLA.x, z - GORILLA.z) - GORILLA.r) < 0.6) continue; // clean glass line
     if (Math.hypot(x - ELEPHANT.x, z - ELEPHANT.z) < ELEPHANT.r - 0.5 && rand() < 0.7) continue; // mostly sand
-    if (Math.abs(x - TICKET_BOOTH.x) < 2.3 && Math.abs(z - TICKET_BOOTH.z) < 2.3) continue; // not through the booth floor
+    if (Math.abs(x - TICKET_BOOTH.x) < 2 && Math.abs(z - TICKET_BOOTH.z) < 1.8) continue; // not through the booth floor
     // patchy: noise decides how lush a spot is
     const patch = smoothstep(0.25, 0.75, hash2(Math.floor(x / 5), Math.floor(z / 5)) * 0.6 + hash2(Math.floor(x / 2), Math.floor(z / 2)) * 0.4);
     const nearPath = smoothstep(0.25, 3, pd);

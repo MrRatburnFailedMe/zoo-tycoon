@@ -94,9 +94,9 @@ export class Delivery {
   status() {
     const s = Math.ceil(this.timer);
     switch (this.state) {
-      case 'ordered': case 'arriving': return `🚚 Your truck arrives at the front gate in ${s}s`;
-      case 'parked': return `🚚 Truck is at the front gate, doors open: unload it! (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left)`;
-      case 'leaving': return '🚚 Truck is heading back to the warehouse. You can order again in a moment.';
+      case 'ordered': case 'arriving': return `Your truck arrives at the front gate in ${s}s`;
+      case 'parked': return `Truck is at the front gate, doors open: unload it! (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left)`;
+      case 'leaving': return 'Truck is heading back to the warehouse. You can order again in a moment.';
       default: return null;
     }
   }
@@ -179,9 +179,13 @@ export class Delivery {
     this.doorOpen = 0;
     this.pending.forEach((type, i) => {
       const col = i % 3, row = Math.floor(i / 3) % 4, layer = Math.floor(i / 12);
-      const local = new THREE.Vector3((col - 1) * 0.62, FLOOR + 0.45 + layer * 0.7, -L / 2 + 0.5 + row * 0.8);
+      const local = new THREE.Vector3((col - 1) * 0.62, FLOOR + 0.3 + layer * 0.5, -L / 2 + 0.5 + row * 0.8);
       const p = this.root.localToWorld(local);
-      this.items.push(this.game.items.spawn(type, p.x, p.y, p.z, { yaw: Math.random() * 0.4 }));
+      // everything ships boxed: carry the box out, press F to open it
+      const box = this.game.items.spawn('parcel', p.x, p.y, p.z, { yaw: (Math.random() - 0.5) * 0.2 });
+      box.contents = type;
+      box.label = `Box (${this.game.itemName?.(type) || type})`;
+      this.items.push(box);
     });
   }
 

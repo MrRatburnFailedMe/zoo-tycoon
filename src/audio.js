@@ -87,6 +87,8 @@ export const sfx = {
     tone({ f: 1100 * p, f2: 380 * p, type: 'sawtooth', dur: 0.5, vol: 0.08 * v, delay: 0.78 });
   },
   boing: () => tone({ f: 160, f2: 620, type: 'sine', dur: 0.35, vol: 0.14 }),
+  print: () => { for (let i = 0; i < 6; i++) tone({ f: 900 + (i % 2) * 300, type: 'square', dur: 0.03, vol: 0.03, delay: i * 0.05 }); noise({ dur: 0.3, vol: 0.05, f: 3000, type: 'bandpass', q: 2 }); },
+  swipe: () => noise({ dur: 0.25, vol: 0.12, f: 1200, f2: 4000, type: 'bandpass', q: 1.5 }),
   beep: () => { tone({ f: 1500, type: 'square', dur: 0.08, vol: 0.05 }); tone({ f: 2000, type: 'square', dur: 0.12, vol: 0.05, delay: 0.1 }); },
   glass: (v = 1) => {
     noise({ dur: 0.5, vol: 0.4 * v, f: 6000, f2: 2500, type: 'highpass' });

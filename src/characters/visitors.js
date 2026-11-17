@@ -8,14 +8,16 @@ import { angleDiff } from '../util/math.js';
 import { canvasTexture } from '../util/textures.js';
 import { sfx } from '../audio.js';
 
-// Visitors walk up the road, queue at the ticket window, and wait for you to hand them a ticket
-// (hold one and press E on them, or just drop it in front of them). They pay by card or cash,
-// go through a turnstile, look at an exhibit or two, and head home. Leave them waiting too long
-// and they give up and go home grumpy.
+// Visitors walk up the road and queue at the ticket window. The one at the front orders some
+// tickets (speech bubble) and hands over cash or a card. You print the tickets and hand them over
+// (E with a ticket, or drop it on the ledge in front of them), and take the payment: swipe the card,
+// or ring the cash up at the register and give the right change. Then they push through a
+// turnstile, look at an exhibit or two, and head home. Leave them waiting too long and they leave.
 
 const SPAWN = { x: 3.6, z: 96 };
 const ROAD = { x: 4.4, z: 68 }; // where the road meets the queue
-const MAX_IN_PARK = 12, MAX_QUEUE = 6, PATIENCE = 70;
+const MAX_IN_PARK = 12, MAX_QUEUE = 6, PATIENCE = 100;
+const CARD_COLORS = [0x3f78c2, 0x1d1d1f, 0xd4b14a, 0xe2523c, 0x2fb38a, 0x8e55a8];
 const NAMES = ['Ava', 'Ben', 'Chloe', 'Dev', 'Ella', 'Finn', 'Gia', 'Hugo', 'Isla', 'Jai', 'Kemi', 'Leo', 'Mia', 'Noah', 'Omar', 'Priya', 'Quinn', 'Rosa', 'Sam', 'Tara', 'Umar', 'Vera', 'Wes', 'Xin', 'Yara', 'Zed'];
 const SHIRTS = [0xe2523c, 0x3f78c2, 0xffd34d, 0x8e55a8, 0x2fb38a, 0xff8a3d, 0xf06292, 0x4caf50, 0xffffff];
 const PANTS = [0x3d3d3d, 0x4f6178, 0xb8a070, 0x2b3a55, 0x6b4a2e];
@@ -23,17 +25,33 @@ const SKIN = [0xf0cdb0, 0xe8b48c, 0xc68c5e, 0x8d5a3b, 0x5c3a24];
 const HAIR = [0x1d1a18, 0x3a2618, 0xb5651d, 0xe0c068, 0x111111, 0x7a7a7a];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-let bubbleTex = null;
-function bubble() {
-  bubbleTex ||= canvasTexture(128, 96, (g) => {
-    g.fillStyle = '#fff'; g.strokeStyle = '#2b2440'; g.lineWidth = 6;
-    g.beginPath(); g.roundRect(6, 6, 116, 64, 18); g.moveTo(50, 70); g.lineTo(64, 90); g.lineTo(74, 70); g.fill(); g.stroke();
-    g.fillStyle = '#ffd34d'; g.beginPath(); g.roundRect(26, 22, 76, 34, 6); g.fill(); g.stroke();
-    g.fillStyle = '#2b2440'; g.font = '900 22px "Baloo 2", system-ui'; g.textAlign = 'center'; g.fillText('TICKET?', 64, 47);
-  });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTex, depthTest: false }));
-  s.scale.set(0.6, 0.45, 1);
+// Order bubble: how many tickets they still need and how they're paying.
+function orderBubble() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 160;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  s.scale.set(0.9, 0.56, 1);
   s.renderOrder = 9;
+  s.draw = (need, how, paid) => {
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, 256, 160);
+    g.fillStyle = '#fff'; g.strokeStyle = '#2b2440'; g.lineWidth = 8;
+    g.beginPath(); g.roundRect(8, 8, 240, 112, 26); g.moveTo(108, 120); g.lineTo(128, 150); g.lineTo(148, 120); g.fill(); g.stroke();
+    // a little ticket stub
+    g.fillStyle = '#ffb347'; g.lineWidth = 5;
+    g.beginPath(); g.roundRect(26, 30, 70, 44, 6); g.fill(); g.stroke();
+    g.fillStyle = '#2b2440'; g.font = '900 30px "Baloo 2", system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(need > 0 ? `x${need}` : 'OK', 61, 54);
+    g.textAlign = 'left';
+    g.font = '900 30px "Baloo 2", system-ui';
+    g.fillStyle = paid ? '#2f8f4a' : how === 'CARD' ? '#3f78c2' : '#2f8f4a';
+    g.fillText(paid ? 'PAID' : how, 108, 46);
+    g.fillStyle = '#2b2440'; g.font = '700 22px Inter, system-ui';
+    g.fillText(need > 0 ? 'tickets please' : 'thanks!', 108, 86);
+    tex.needsUpdate = true;
+  };
   return s;
 }
 
@@ -59,13 +77,13 @@ class Visitor {
     this.mgr = mgr;
     this.name = pick(NAMES);
     this.label = `Visitor ${this.name}`;
-    this.interactLabel = 'Give ticket';
+    this.interactLabel = 'Hand ticket';
     this.char = createCharacter({ shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKIN), hair: pick(HAIR), socks: 0x333333 });
     this.root = this.char.root;
     const s = 0.88 + Math.random() * 0.2;
     this.root.scale.setScalar(s);
     this.root.traverse((o) => { if (o.isMesh) o.userData.entity = this; });
-    this.bubble = bubble();
+    this.bubble = orderBubble();
     this.bubble.position.set(0, 2.3, 0);
     this.bubble.visible = false;
     this.root.add(this.bubble);
@@ -85,27 +103,58 @@ class Visitor {
     this.state = 'arrive';
     this.wait = 0;
     this.arrivedAt = game.time;
-    this.byCard = Math.random() < 0.6;
+    this.byCard = Math.random() < 0.5;
+    this.n = pick([1, 1, 2, 2, 2, 3, 4]); // tickets in their party
+    this.got = 0;
+    this.paid = false;
+    this.handed = false; // has put their cash / card on the counter
+    this.cardColor = pick(CARD_COLORS);
     this.plan = [...ENCLOSURES].sort(() => Math.random() - 0.5).slice(0, 1 + (Math.random() < 0.4 ? 1 : 0));
   }
 
-  // E on a visitor at the window while holding a ticket.
+  get total() { return this.n * this.game.state.ticketPrice; }
+  get awaitingPayment() { return this.state === 'queue' && !this.paid; }
+  // cash they hand over: sometimes exact, usually a round note or two over
+  pickTender() {
+    const t = this.total, opts = [t];
+    for (const r of [5, 10, 20, 50, 100]) { const u = Math.ceil((t + 0.01) / r) * r; if (u > t && !opts.includes(u)) opts.push(u); }
+    return Math.random() < 0.15 ? t : pick(opts.slice(1, 4));
+  }
+
+  // E on the visitor at the window while holding a ticket.
   interact() {
     const g = this.game, held = g.grabber.entity;
     if (this.state !== 'queue' || this.mgr.queue[0] !== this) { this.say(this.state === 'queue' ? 'Wait your turn!' : 'Hi!'); return; }
-    if (held?.type !== 'ticket') { this.say('I need a ticket!'); return; }
+    if (held?.type !== 'ticket') { this.say(this.got < this.n ? `${this.n - this.got} ticket${this.n - this.got > 1 ? 's' : ''}, please!` : 'Just need to pay!'); return; }
     g.grabber.release();
     g.items.remove(held);
-    this.admit();
+    this.takeTicket();
   }
 
-  admit() {
+  takeTicket() {
+    this.got++;
+    sfx.click();
+    if (this.got > this.n) this.say('I already have mine!');
+    this.refresh();
+    this.checkDone();
+  }
+
+  paidUp() {
+    this.paid = true;
+    this.mgr.log(this, this.byCard ? 'card' : 'cash', this.total);
+    this.refresh();
+    this.checkDone();
+  }
+
+  refresh() { this.bubble.draw(Math.max(0, this.n - this.got), this.byCard ? 'CARD' : `CASH`, this.paid); }
+
+  checkDone() {
+    if (!this.paid || this.got < this.n) return;
     this.mgr.admitted(this);
     this.state = 'pay';
     this.wait = 1.1;
     this.bubble.visible = false;
-    this.game.gate.pay(this.byCard, this.pos);
-    this.say(this.byCard ? 'Card, please!' : 'Keep the change!');
+    this.say(pick(['Thanks!', 'Let\'s go!', 'Lions first!', 'Yay!']));
   }
 
   say(text, color = '#ffffff') { this.game.animals.shout(text, this.pos.x, this.pos.y + 2.1, this.pos.z, color); }
@@ -143,11 +192,20 @@ class Visitor {
         this.path = [slot];
         if (this.walk(dt)) this.yaw += angleDiff(Math.PI, this.yaw) * Math.min(1, dt * 6);
         this.wait += dt;
-        this.bubble.visible = i === 0 && Math.hypot(slot[0] - this.pos.x, slot[1] - this.pos.z) < 0.4;
+        const atWindow = i === 0 && Math.hypot(slot[0] - this.pos.x, slot[1] - this.pos.z) < 0.4;
+        if (atWindow && !this.handed) {
+          this.handed = true;
+          this.tender = this.pickTender();
+          this.refresh();
+          this.payment = g.gate.handOver(this);
+          this.say(`${this.n} ticket${this.n > 1 ? 's' : ''}, please! ${this.byCard ? 'Card OK?' : 'Here\'s $' + this.tender + '.'}`);
+        }
+        this.bubble.visible = atWindow;
         this.bubble.position.y = 2.3 + Math.sin(t * 4) * 0.05;
         if (i === 0) this.checkDroppedTicket();
         if (this.wait > PATIENCE) {
           mgr.queue.splice(i, 1);
+          if (this.payment && g.items.list.includes(this.payment)) g.items.remove(this.payment); // they take their money back
           this.bubble.visible = false;
           this.say(pick(['Too slow!', 'Forget this zoo!', 'I\'m going to the aquarium!']), '#ffb0a0');
           g.state.addHype(-2);
@@ -181,7 +239,7 @@ class Visitor {
         if (this.walk(dt)) {
           this.state = 'watch';
           this.wait = 12 + Math.random() * 15;
-          if (Math.random() < 0.5) this.say(pick(['Wow!', 'So cute!', 'Look, Mum!', 'Ewww', 'Amazing!', '🤩']), '#ffd34d');
+          if (Math.random() < 0.5) this.say(pick(['Wow!', 'So cute!', 'Look, Mum!', 'Ewww', 'Amazing!']), '#ffd34d');
           g.state.addHype(0.6);
         }
         break;
@@ -215,7 +273,7 @@ class Visitor {
       const p = it.body.position;
       if (Math.hypot(p.x - this.pos.x, p.z - this.pos.z) < 1.1 && p.y > this.pos.y + 0.6 && p.y < this.pos.y + 2.2) {
         g.items.remove(it);
-        this.admit();
+        this.takeTicket();
         return;
       }
     }
@@ -255,26 +313,13 @@ export class Visitors {
   }
 
   admitted(v) {
-    this.queue.splice(this.queue.indexOf(v), 1);
-    this.log(v, v.byCard ? 'card' : 'cash', this.game.state.ticketPrice);
+    const i = this.queue.indexOf(v);
+    if (i >= 0) this.queue.splice(i, 1);
   }
 
   log(v, how, paid) {
     this.history.unshift({ name: v.name, how, paid, time: Date.now() });
     this.history.length = Math.min(this.history.length, 30);
-  }
-
-  // Gate computer actions.
-  admitNext() { const v = this.queue[0]; if (v) { v.byCard = true; v.admit(); } return v; }
-  turnAway(v) {
-    const i = this.queue.indexOf(v);
-    if (i < 0) return;
-    this.queue.splice(i, 1);
-    v.bubble.visible = false;
-    v.say('Fine then!', '#ffb0a0');
-    this.log(v, 'turned away', 0);
-    v.state = 'home';
-    v.path = [[ROAD.x, ROAD.z], [SPAWN.x, SPAWN.z]];
   }
 
   remove(v) {

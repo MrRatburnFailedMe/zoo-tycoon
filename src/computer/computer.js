@@ -28,7 +28,7 @@ export class Computer {
       <div class="monitor">
         <div class="screen">
           <div class="wallpaper"><div class="sun"></div><div class="hill h1"></div><div class="hill h2"></div><div class="brandmark">ZooOS</div></div>
-          <div class="desk-icons"><button class="dicon" data-app="browser">${GLOBE_SVG}<span>Browser</span></button>${Object.entries(APPS).map(([k, a]) => `<button class="dicon" data-app="${k}"><i class="emo" style="background:${a.color}">${a.icon}</i><span>${a.name}</span></button>`).join('')}<button class="dicon" data-app="shop"><i class="emo" style="background:#2fb38a">🛒</i><span>ZooMart</span></button></div>
+          <div class="desk-icons"><button class="dicon" data-app="browser">${GLOBE_SVG}<span>Browser</span></button>${Object.entries(APPS).map(([k, a]) => `<button class="dicon" data-app="${k}"><i class="emo" style="background:${a.color}">${a.icon}</i><span>${a.name}</span></button>`).join('')}<button class="dicon" data-app="shop"><i class="emo" style="background:#2fb38a">ZM</i><span>ZooMart</span></button></div>
           <div class="window awin hidden"><div class="a-top"><b class="a-title"></b><div class="wbtns"><button class="wbtn" data-a="max">&#x25A1;</button><button class="wbtn close" data-a="close">&#x2715;</button></div></div><div class="a-view"></div></div>
           <div class="window bwin hidden">
             <div class="b-top">
@@ -107,7 +107,7 @@ export class Computer {
   openApp(key) {
     const a = APPS[key];
     this.app = key;
-    this.awin.querySelector('.a-title').textContent = `${a.icon} ${a.name}`;
+    this.awin.querySelector('.a-title').textContent = a.name;
     const view = this.awin.querySelector('.a-view');
     view.innerHTML = a.render(this.appCtx);
     a.bind?.(view, this.appCtx);

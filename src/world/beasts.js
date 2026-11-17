@@ -59,26 +59,33 @@ export function elephantGeo() {
 }
 
 export function gorillaGeo() {
-  const FUR = 0x3b3b3e, DARK = 0x2a2a2c, SKIN = 0x5b4e48, CHEST = 0x4b4545, SILVER = 0x8b8b8f;
+  // Faceted low-poly silverback, knuckle-walking: charcoal fur, brown leathery face and chest.
+  const FUR = 0x3c3c3e, FUR2 = 0x47474a, DARK = 0x2a2a2c, FACE = 0x6e4b35, CHEST = 0x5e4434, NAIL = 0x222222;
+  const I = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
   const parts = [
-    prep(S(0.55, 8, 6), FUR, { pos: [0, 1.0, 0.1], scale: [1.05, 0.85, 1.25], jitter: 0.05 }), // torso
-    prep(S(0.45, 8, 6), SILVER, { pos: [0, 1.05, -0.35], scale: [0.95, 0.7, 0.9] }), // silverback
-    prep(S(0.42, 8, 6), FUR, { pos: [0, 1.2, 0.45], scale: [1.35, 0.8, 0.8] }), // shoulders
-    prep(S(0.35, 7, 5), CHEST, { pos: [0, 0.95, 0.55], scale: [1, 1, 0.5] }),
-    prep(S(0.26, 8, 6), FUR, { pos: [0, 1.32, 0.88], scale: [1, 1.1, 1] }), // head
-    prep(S(0.2, 7, 5), DARK, { pos: [0, 1.55, 0.82], scale: [1, 0.8, 1] }), // crest
-    prep(S(0.16, 7, 5), SKIN, { pos: [0, 1.27, 1.04], scale: [1.15, 0.9, 0.7] }), // face
-    prep(new THREE.BoxGeometry(0.34, 0.06, 0.1), DARK, { pos: [0, 1.4, 1.06] }), // brow
-    prep(S(0.03, 4, 3), 0x111111, { pos: [-0.07, 1.34, 1.13] }), prep(S(0.03, 4, 3), 0x111111, { pos: [0.07, 1.34, 1.13] }),
+    prep(I(0.55), FUR, { pos: [0, 1.02, -0.05], scale: [1.05, 0.95, 1.3], jitter: 0.05 }), // barrel torso
+    prep(I(0.48), FUR2, { pos: [0, 1.3, 0.42], scale: [1.45, 0.95, 0.95], jitter: 0.04 }), // huge shoulders
+    prep(I(0.4), FUR, { pos: [0, 0.82, -0.55], scale: [1.1, 0.95, 0.9], jitter: 0.04 }), // rump
+    prep(I(0.32), CHEST, { pos: [0, 1.0, 0.62], scale: [1.05, 1.1, 0.45] }), // bare chest
+    prep(I(0.27), FUR, { pos: [0, 1.5, 0.86], scale: [1, 1.05, 1] }), // head
+    prep(new THREE.ConeGeometry(0.2, 0.38, 5), FUR2, { pos: [0, 1.78, 0.74], rot: [-0.5, 0, 0] }), // sagittal crest
+    prep(I(0.17, 0), FACE, { pos: [0, 1.42, 1.07], scale: [1.25, 1.05, 0.75] }), // face
+    prep(I(0.11, 0), FACE, { pos: [0, 1.33, 1.16], scale: [1.3, 0.8, 0.9] }), // muzzle
+    prep(new THREE.BoxGeometry(0.38, 0.07, 0.12), DARK, { pos: [0, 1.53, 1.08], rot: [0.25, 0, 0] }), // heavy brow
+    prep(I(0.025, 0), 0x0d0d0d, { pos: [-0.07, 1.47, 1.15] }), prep(I(0.025, 0), 0x0d0d0d, { pos: [0.07, 1.47, 1.15] }),
+    prep(I(0.03, 0), 0x1a1a1a, { pos: [-0.035, 1.36, 1.23] }), prep(I(0.03, 0), 0x1a1a1a, { pos: [0.035, 1.36, 1.23] }), // nostrils
   ];
   for (const s of [-1, 1]) {
-    // long arms reaching to the knuckles
-    parts.push(prep(C(0.13, 0.11, 0.62, 7), FUR, { pos: [s * 0.55, 0.9, 0.55], rot: [0.15, 0, s * 0.12] }));
-    parts.push(prep(C(0.11, 0.1, 0.55, 7), FUR, { pos: [s * 0.6, 0.36, 0.62] }));
-    parts.push(prep(S(0.12, 6, 4), DARK, { pos: [s * 0.6, 0.07, 0.66], scale: [1, 0.6, 1.2] }));
-    // short legs
-    parts.push(prep(C(0.15, 0.12, 0.55, 7), FUR, { pos: [s * 0.32, 0.3, -0.42] }));
-    parts.push(prep(new THREE.BoxGeometry(0.2, 0.08, 0.3), DARK, { pos: [s * 0.32, 0.04, -0.36] }));
+    parts.push(prep(I(0.08, 0), FACE, { pos: [s * 0.26, 1.5, 0.88] })); // ears
+    // long thick arms down to the knuckles
+    parts.push(prep(I(0.2), FUR2, { pos: [s * 0.62, 1.12, 0.62], scale: [0.9, 1.6, 0.9], rot: [0.2, 0, s * 0.18], jitter: 0.02 }));
+    parts.push(prep(I(0.17), FUR, { pos: [s * 0.68, 0.48, 0.72], scale: [0.9, 1.9, 0.9], rot: [-0.08, 0, s * 0.05], jitter: 0.02 }));
+    parts.push(prep(new THREE.BoxGeometry(0.24, 0.13, 0.26), DARK, { pos: [s * 0.69, 0.07, 0.78] })); // knuckle fist
+    for (const k of [-1, 0, 1]) parts.push(prep(new THREE.BoxGeometry(0.06, 0.06, 0.06), NAIL, { pos: [s * 0.69 + k * 0.07, 0.05, 0.92] }));
+    // short bowed legs
+    parts.push(prep(I(0.2), FUR, { pos: [s * 0.36, 0.52, -0.55], scale: [0.95, 1.35, 1], jitter: 0.02 }));
+    parts.push(prep(I(0.15), FUR2, { pos: [s * 0.4, 0.2, -0.45], scale: [0.9, 1.2, 0.9] }));
+    parts.push(prep(new THREE.BoxGeometry(0.22, 0.08, 0.36), DARK, { pos: [s * 0.4, 0.04, -0.34] }));
   }
   return merge(parts);
 }

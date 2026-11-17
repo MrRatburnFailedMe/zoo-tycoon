@@ -38,13 +38,13 @@ export class Interactor {
     let text = '';
     if (g.grabber.held) {
       const e = g.grabber.entity;
-      text = `Let go of <kbd>LMB</kbd> to drop &nbsp; <kbd>RMB</kbd> Throw${e.use ? ` &nbsp; <kbd>F</kbd> ${e.useLabel}` : ''}`;
+      text = `<kbd>Click</kbd> Drop &nbsp; Hold <kbd>Q</kbd> Throw &nbsp; Hold <kbd>R</kbd> Look${e.use ? ` &nbsp; <kbd>F</kbd> ${e.useLabel}` : ''}`;
       g.hud.crosshair('holding');
     } else if (this.hit) {
       const e = this.hit.entity;
       const parts = [];
       if (e.interact) parts.push(`<kbd>E</kbd> ${e.interactLabel}`);
-      if (e.getGrabBody) parts.push(`Hold <kbd>LMB</kbd> to grab ${e.label}`);
+      if (e.getGrabBody) parts.push(`<kbd>Click</kbd> Grab ${e.label}`);
       text = parts.join(' &nbsp; ');
       g.hud.crosshair('active');
     } else g.hud.crosshair('');

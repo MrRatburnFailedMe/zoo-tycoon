@@ -14,8 +14,10 @@ export class Input {
 
     addEventListener('keydown', (e) => {
       if (!this.enabled || e.repeat) return;
+      if (/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)) return;
       this.keys.add(e.code);
       this.pressed.add(e.code);
+      if (/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName) || e.target?.isContentEditable) return; // typing in a form
       if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));

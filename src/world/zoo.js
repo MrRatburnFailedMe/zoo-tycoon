@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { StaticBatch, staticBody, solidBox, mat, mesh, BLOCKER } from '../util/build.js';
 import { signTexture } from '../util/textures.js';
+import { loadGLB } from '../util/glb.js';
 import { angleDiff } from '../util/math.js';
 import { heightAt } from './terrain.js';
 import { ENCLOSURES, PERIMETER_R, GATE, GATE_W, PLAZA, DUMPSTER, OFFICE } from './layout.js';
@@ -42,6 +43,7 @@ function fenceRing(game, batch, cx, cz, r, { gapAngle = null, gapWidth = 2.8, co
 }
 
 export function signBoard(game, text, x, z, yaw, { w = 2.2, h = 0.7, postH = 1.6, bg = '#2f5d3a', fg = '#fff3c4', sub } = {}) {
+  if (!signBoard.enabled) return null; // no text signs in the park (owner's call)
   const y = heightAt(x, z);
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -122,20 +124,27 @@ export function buildZoo(game) {
   {
     const { x, z } = DUMPSTER;
     const y = heightAt(x, z);
-    const W = 2.4, D = 1.4, H = 1.25, t = 0.08, green = 0x2f6b3a;
-    solidBox(game, { size: [W, t, D], pos: [x, y + 0.2, z], color: green });
-    solidBox(game, { size: [W, H, t], pos: [x, y + 0.2 + H / 2, z - D / 2], color: green });
-    solidBox(game, { size: [W, H * 0.85, t], pos: [x, y + 0.2 + (H * 0.85) / 2, z + D / 2], color: green });
-    solidBox(game, { size: [t, H, D], pos: [x - W / 2, y + 0.2 + H / 2, z], color: green });
-    solidBox(game, { size: [t, H, D], pos: [x + W / 2, y + 0.2 + H / 2, z], color: green });
-    for (const s of [-1, 1]) solidBox(game, { size: [0.2, 0.25, 0.2], pos: [x + s * (W / 2 - 0.2), y + 0.06, z], color: 0x222222, collide: false });
-    const lid = mesh(new THREE.BoxGeometry(W + 0.05, 0.06, D), mat(0x234f2c));
-    lid.position.set(x, y + 0.2 + H + 0.45, z - D / 2 - 0.45);
-    lid.rotation.x = -1.2;
-    scene.add(lid);
-    const label = mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshStandardMaterial({ map: signTexture('POOP & TRASH', { bg: '#2f6b3a', edge: '#2f6b3a', fg: '#fff', size: 120 }) }), { cast: false });
-    label.position.set(x, y + 0.75, z + D / 2 + 0.05);
-    scene.add(label);
+    const W = 2.4, D = 1.5, H = 1.25, t = 0.08;
+    // invisible walls; the dumpster model (Quaternius) sits over them
+    const wall = (sx, sy, sz, px, py, pz) => staticBody(game, new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2)), px, py, pz);
+    wall(W, t, D, x, y + 0.2, z);
+    wall(W, H, t, x, y + 0.2 + H / 2, z - D / 2);
+    wall(W, H * 0.85, t, x, y + 0.2 + (H * 0.85) / 2, z + D / 2);
+    wall(t, H, D, x - W / 2, y + 0.2 + H / 2, z);
+    wall(t, H, D, x + W / 2, y + 0.2 + H / 2, z);
+    loadGLB('assets/dumpster.glb').then((gl) => {
+      const m = gl.scene;
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = o.receiveShadow = true;
+        o.material = new THREE.MeshStandardMaterial({ color: o.material.color, roughness: 0.7, metalness: 0.2, flatShading: true });
+      });
+      const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3());
+      const k = (W + 0.2) / size.x;
+      m.scale.setScalar(k);
+      m.position.set(x - ((bb.min.x + bb.max.x) / 2) * k, y - bb.min.y * k, z - ((bb.min.z + bb.max.z) / 2) * k + 0.05);
+      scene.add(m);
+    }).catch(() => {});
     bins.push({ name: 'Dumpster', contains: (p) => Math.abs(p.x - x) < W / 2 && Math.abs(p.z - z) < D / 2 && p.y > y + 0.2 && p.y < y + 0.2 + H + 0.3 });
   }
   const binSpots = [[4.5, 16], [-4.5, 32], [PLAZA.x - 8.5, PLAZA.z + 3], [11, -8], [-13, -6], [6, -20]];

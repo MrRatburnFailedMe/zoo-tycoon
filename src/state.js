@@ -14,7 +14,7 @@ const STAFF = [{ role: 'Keeper', wage: 18 }, { role: 'Keeper', wage: 18 }, { rol
 const BUCKET = 30; // seconds of game time per analytics bar
 
 // Shared zoo economy. In multiplayer this is the object the host owns and syncs.
-// money = the bank account; cash = notes visitors have handed over that still need depositing at the ATM.
+// money = the bank account (the register drawer pays straight into it).
 export class GameState {
   constructor() {
     this.money = 500;
@@ -69,23 +69,26 @@ export class GameState {
     return true;
   }
 
-  // A visitor paid for a ticket: card goes straight to the bank, cash goes in the till.
-  sellTicket(byCard) {
-    const p = this.ticketPrice;
-    this.ticketsSold++;
+  // A visitor paid for their tickets, by card (swiped) or cash (rung up at the register).
+  sellTickets(n, byCard) {
+    const p = this.ticketPrice * n;
+    this.ticketsSold += n;
     this.revenue += p;
-    if (byCard) this.earn(p, 'Ticket (card)', 'tickets');
-    else { this.cash += p; this.record('Ticket (cash)', p, 'tickets'); this.emit(); }
+    this.earn(p, `${n} ticket${n > 1 ? 's' : ''} (${byCard ? 'card' : 'cash'})`, 'tickets');
     return p;
   }
 
-  // Notes fed into the ATM move from cash on hand to the bank.
+  // Change handed back at the register that didn't match what was owed (positive = you kept extra).
+  changeError(n) {
+    if (!n) return;
+    if (n > 0) this.earn(n, 'Short-changed a visitor', 'other');
+    else this.spend(-n, 'Gave too much change', 'other', { bill: true });
+  }
+
+  // Loose notes put in the register go to the bank.
   deposit(n) {
     if (n <= 0) return 0;
-    this.cash = Math.max(0, this.cash - n);
-    this.money += n;
-    this.log.unshift({ time: Date.now(), label: 'ATM cash deposit', amount: n, cat: 'deposit' });
-    this.emit();
+    this.earn(n, 'Cash deposit', 'other');
     return n;
   }
 

@@ -21,8 +21,8 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Painted wooden/metal sign board.
-export function signTexture(text, { w = 1024, h = 256, bg = '#2f5d3a', fg = '#fff3c4', edge = '#1b3322', size = 140, sub = null } = {}) {
+// Painted board with a paw-print emblem. No words: the owner wants zero text signs in the world.
+export function signTexture(_text, { w = 1024, h = 256, bg = '#2f5d3a', fg = '#fff3c4', edge = '#1b3322' } = {}) {
   return canvasTexture(w, h, (ctx) => {
     ctx.fillStyle = edge;
     ctx.fillRect(0, 0, w, h);
@@ -30,17 +30,13 @@ export function signTexture(text, { w = 1024, h = 256, bg = '#2f5d3a', fg = '#ff
     roundRect(ctx, 14, 14, w - 28, h - 28, 22);
     ctx.fill();
     ctx.fillStyle = fg;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `900 ${size}px "Baloo 2", system-ui, sans-serif`;
-    let fs = size;
-    while (ctx.measureText(text).width > w - 80 && fs > 20) { fs -= 6; ctx.font = `900 ${fs}px "Baloo 2", system-ui, sans-serif`; }
-    ctx.fillText(text, w / 2, sub ? h * 0.42 : h / 2 + fs * 0.06);
-    if (sub) {
-      ctx.globalAlpha = 0.8;
-      ctx.font = `700 ${Math.round(size * 0.32)}px Inter, system-ui, sans-serif`;
-      ctx.fillText(sub, w / 2, h * 0.78);
-    }
+    const paw = (cx, cy, r) => {
+      ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.35, r * 0.62, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      for (const [dx, dy] of [[-0.62, -0.32], [-0.22, -0.7], [0.22, -0.7], [0.62, -0.32]]) { ctx.beginPath(); ctx.ellipse(cx + dx * r, cy + dy * r, r * 0.2, r * 0.26, dx * 0.6, 0, Math.PI * 2); ctx.fill(); }
+    };
+    const r = h * 0.28, n = Math.max(1, Math.min(5, Math.floor(w / (h * 0.9))));
+    for (let i = 0; i < n; i++) { ctx.globalAlpha = i % 2 ? 0.55 : 0.95; paw(w * (i + 0.5) / n, h * 0.52 + (i % 2 ? -h * 0.06 : h * 0.04), r); }
+    ctx.globalAlpha = 1;
   });
 }
 

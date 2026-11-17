@@ -18,7 +18,7 @@ import { Interactor } from './player/interact.js';
 import { Friend } from './characters/friend.js';
 import { LOOKS, loadCharacterModel } from './characters/character.js';
 import { Computer } from './computer/computer.js';
-import { GATE, PLAZA, ATM, CART_SPAWN } from './world/layout.js';
+import { GATE, PLAZA, CART_SPAWN } from './world/layout.js';
 import { Glass } from './world/glass.js';
 import { buildHabitats } from './world/habitats.js';
 import { buildGate } from './world/gate.js';
@@ -56,7 +56,7 @@ const game = {
   uniforms: { time: { value: 0 } },
   mods: { ...DEFAULT_MODS },
   mode: 'menu', // menu | play | computer | resuming | feedback
-  version: '0.8.0',
+  version: '0.9.0',
   time: 0,
 };
 window.game = game;
@@ -84,7 +84,7 @@ const spot = game.office.spots.friend;
 game.friends = [
   new Friend(game, { look: LOOKS[1], x: spot[0], y: spot[1], z: spot[2], yaw: Math.PI / 2 }),
   new Friend(game, { look: LOOKS[2], x: PLAZA.x + 4.5, z: PLAZA.z + 4.5, yaw: 0.6 }),
-  new Friend(game, { look: LOOKS[3], x: ATM.x - 2.2, z: ATM.z - 1.5, yaw: -Math.PI / 2 }),
+  new Friend(game, { look: LOOKS[3], x: 5, z: 45, yaw: -Math.PI / 2 }),
 ];
 spawnStarterItems(game);
 // Tab: mod menu. Owner builds only (the page sets window.ZOO_OWNER); the public site ships without mods.js.
@@ -166,7 +166,7 @@ function frame(now) {
     game.uniforms.time.value = game.time;
     if (game.mode === 'play') {
       player.update(dt);
-      if (!player.driving) {
+      if (!player.driving || player.driving.seat) { // you can work the desk from the gate chair
         game.interact.update();
         grabber.update();
       }
@@ -202,9 +202,10 @@ function frame(now) {
   game.modMenu?.update(dt);
 
   game.hands.update(dt, {
-    visible: game.mods.hands && !player.driving && (game.mode === 'play' || game.mode === 'resuming'),
+    visible: game.mods.hands && (!player.driving || player.driving.seat) && (game.mode === 'play' || game.mode === 'resuming'),
     holding: !!grabber.held && game.mode === 'play',
     heavy: grabber.heavy,
+    charge: grabber.charging ? grabber.charge : 0,
     bob: player.bobPhase,
     bobAmt: player.bobAmt,
     lookDX: player.lookDX || 0,

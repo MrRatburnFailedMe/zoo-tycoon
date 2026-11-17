@@ -9,52 +9,39 @@ const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 6
 export const APPS = {
   gate: {
     name: 'Gate Desk',
-    icon: '🎟️',
+    icon: 'GD',
     color: '#e2523c',
     render: () => `<div class="app-gate">
       <div class="ag-top">
         <div class="ag-stat"><small>IN QUEUE</small><b class="ag-q">0</b></div>
         <div class="ag-stat"><small>IN THE PARK</small><b class="ag-in">0</b></div>
-        <div class="ag-stat"><small>CASH TO BANK</small><b class="ag-cash">$0</b></div>
+        <div class="ag-stat"><small>TICKETS SOLD</small><b class="ag-sold">0</b></div>
         <div class="ag-stat"><small>TICKET PRICE</small><b class="ag-price">$0</b><input type="range" min="1" max="80" class="ag-range" /></div>
       </div>
       <div class="ag-cols">
-        <section><h3>Queue at the window</h3><div class="ag-queue"></div>
-          <button class="ag-next">Sell e-ticket to next in line (card)</button></section>
-        <section><h3>Recent transactions</h3><table class="ag-tx"></table></section>
+        <section><h3>Recent sales</h3><table class="ag-tx"></table></section>
       </div>
-      <p class="ag-tip">Tip: grab a ticket off the pile and hand it over (E), or drop it on the counter in front of them. Cash goes in the tray: take it to the ATM.</p>
+      <p class="ag-tip">Customers order at the window. Print tickets on the printer and hand them over, swipe cards on the reader, and ring cash up at the register.</p>
     </div>`,
     bind(view, ctx) {
       const r = view.querySelector('.ag-range');
       r.value = ctx.state.ticketPrice;
       r.addEventListener('input', () => ctx.state.setPrice(+r.value));
-      view.querySelector('.ag-next').addEventListener('click', () => { if (!ctx.visitors.admitNext()) ctx.sfx.error(); });
-      view.querySelector('.ag-queue').addEventListener('click', (e) => {
-        const b = e.target.closest('[data-away]');
-        if (b) ctx.visitors.turnAway(ctx.visitors.queue[+b.dataset.away]);
-      });
     },
     live(view, { state, visitors }) {
       const set = (s, v) => { const el = view.querySelector(s); if (el) el.textContent = v; };
       set('.ag-q', visitors.queue.length);
       set('.ag-in', visitors.list.filter((v) => ['enter', 'tour', 'watch', 'leave'].includes(v.state)).length);
-      set('.ag-cash', money(state.cash));
+      set('.ag-sold', state.ticketsSold);
       set('.ag-price', money(state.ticketPrice));
-      view.querySelector('.ag-queue').innerHTML = visitors.queue.length
-        ? visitors.queue.map((v, i) => {
-          const mood = v.wait < 25 ? '🙂' : v.wait < 50 ? '😐' : '😠';
-          return `<div class="ag-row"><span>${mood} <b>${esc(v.name)}</b> · waiting ${Math.round(v.wait)}s · pays by ${v.byCard ? 'card' : 'cash'}</span><button data-away="${i}">Turn away</button></div>`;
-        }).join('')
-        : '<div class="ag-empty">Nobody waiting. Try some ads!</div>';
-      view.querySelector('.ag-tx').innerHTML = visitors.history.slice(0, 12).map((h) =>
-        `<tr><td>${ago(h.time)}</td><td>${esc(h.name)}</td><td>${esc(h.how)}</td><td class="${h.paid ? 'p' : 'n'}">${h.paid ? '+' + money(h.paid) : '—'}</td></tr>`).join('') || '<tr><td>No sales yet</td></tr>';
+      view.querySelector('.ag-tx').innerHTML = visitors.history.slice(0, 14).map((h) =>
+        `<tr><td>${ago(h.time)}</td><td>${esc(h.name)}</td><td>${esc(h.how)}</td><td class="${h.paid ? 'p' : 'n'}">${h.paid ? '+' + money(h.paid) : '-'}</td></tr>`).join('') || '<tr><td>No sales yet</td></tr>';
     },
   },
 
   analytics: {
     name: 'Analytics',
-    icon: '📊',
+    icon: 'AN',
     color: '#58b8f0',
     render: () => `<div class="app-an">
       <div class="an-top">

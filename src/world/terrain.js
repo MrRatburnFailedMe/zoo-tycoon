@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { smoothstep, hash2, lerp } from '../util/math.js';
-import { FLATTEN, POND, PLAZA, HIPPO, LION, MONKEY, pathDist, inMonkeyHouse } from './layout.js';
+import { FLATTEN, POND, PLAZA, HIPPO, LION, MONKEY, HIPPO_ISLAND, pathDist, inMonkeyHouse } from './layout.js';
 
 export const TERRAIN_SIZE = 280;
 export const TERRAIN_SEGS = 200;
@@ -36,7 +36,7 @@ function flattenZones() {
 const hippoRim = () => flattenZones()[3].h;
 
 export function pondWaterY() {
-  return hippoRim() - HIPPO.depth + 1.55;
+  return hippoRim() - HIPPO.depth + 2.05; // higher water: hippos sit closer to the viewing deck
 }
 
 // How far below the rim the hippo pit is at (x, z). Steep wall on the visitor deck side,
@@ -51,7 +51,9 @@ function hippoDig(x, z) {
   let dig = HIPPO.depth * (1 - smoothstep(inner, outer, d));
   // lumpy mud bottom and a little island to haul out on
   dig += Math.sin(x * 0.9) * Math.cos(z * 1.1) * 0.18 * (1 - smoothstep(inner, outer, d));
-  dig -= 1.7 * gauss(x, z, POND.x + 2.2, POND.z - 2.6, 1.3);
+  // the island: a flat-topped mud mound poking ~0.35 m out of the water
+  const isl = 1 - smoothstep(HIPPO_ISLAND.r * 0.65, HIPPO_ISLAND.r * 1.25, Math.hypot(x - HIPPO_ISLAND.x, z - HIPPO_ISLAND.z));
+  dig = lerp(dig, HIPPO.depth - 2.05 - 0.35 + Math.sin(x * 2.1 + z) * 0.05, isl);
   return dig;
 }
 

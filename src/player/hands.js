@@ -91,6 +91,13 @@ export class Hands {
         t.copy(a.restTarget);
         t.y += Math.sin(performance.now() * 0.0015 + a.side) * 0.006;
       }
+      if (holding && s.charge > 0) {
+        // winding up a throw: the throwing arm pulls back, and trembles once it's at full power
+        const c = s.charge;
+        if (a.side === 1) t.set(0.16 + c * 0.07, -0.2 + c * 0.09, -0.5 + c * 0.16);
+        else t.set(-0.16 + c * 0.06, -0.2 + c * 0.03, -0.5 + c * 0.08);
+        if (c >= 1) { const j = 0.018; t.x += (Math.random() - 0.5) * j; t.y += (Math.random() - 0.5) * j; t.z += (Math.random() - 0.5) * j; }
+      }
       if (a.side === 1 && this.punchT > 0) t.set(0.06, -0.12, -0.85);
       if (this.throwT > 0) t.set(a.side * 0.12, -0.05, -0.9);
       t.sub(this.root.position);

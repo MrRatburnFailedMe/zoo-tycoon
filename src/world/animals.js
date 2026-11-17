@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { loadGLB } from '../util/glb.js';
 import { heightAt, pondWaterY } from './terrain.js';
-import { LION, HIPPO, POND, MONKEY, PENGUIN, ELEPHANT, GORILLA } from './layout.js';
+import { LION, HIPPO, POND, MONKEY, PENGUIN, ELEPHANT, GORILLA, HIPPO_ISLAND } from './layout.js';
 import { penguinGeo, elephantGeo, gorillaGeo } from './beasts.js';
 import { angleDiff, clamp, damp } from '../util/math.js';
 import { sfx } from '../audio.js';
@@ -19,7 +19,7 @@ const SPECIES = {
     walk: 1.3, run: 6.8, turn: 2.6, sleepChance: 0.22, sideSleep: true,
   },
   hippo: {
-    url: 'assets/hippo.glb', yaw: -Math.PI / 2, length: 3.1, color: 0x87716b,
+    url: 'assets/hippo.glb', yaw: -Math.PI / 2, length: 3.4, color: 0xb08a86,
     legTop: 0.3, headZ: 0.27, neckY: 0.62, tailZ: -0.44, stride: 0.08, lift: 0.06, tail: 0.03,
     walk: 0.9, run: 3.6, turn: 1.3, sleepChance: 0.25,
   },
@@ -28,18 +28,18 @@ const SPECIES = {
     legTop: 0.42, headZ: 0.3, neckY: 0.72, tailZ: -0.38, stride: 0.13, lift: 0.1, tail: 0.06,
     walk: 1.4, run: 4.2, turn: 4.5, sleepChance: 0.16,
   },
-  // built from primitives in beasts.js
   penguin: {
-    build: penguinGeo, yaw: 0, length: 0.5, color: null,
+    url: 'assets/penguin.glb', yaw: 0, length: 0.34, color: null,
     legTop: 0.1, headZ: 0.6, neckY: 0.8, tailZ: -0.42, stride: 0.16, lift: 0.05, tail: 0.0, sway: 0.24,
     walk: 0.7, run: 1.8, turn: 3.5, sleepChance: 0.1,
   },
   elephant: {
-    build: elephantGeo, yaw: 0, length: 4.4, color: null,
+    url: 'assets/elephant.glb', yaw: 0, length: 4.4, color: null,
     legTop: 0.4, headZ: 0.12, neckY: 0.75, tailZ: -0.44, stride: 0.08, lift: 0.05, tail: 0.03,
     walk: 1.0, run: 3.2, turn: 1.0, sleepChance: 0.14,
   },
   gorilla: {
+    // built from primitives in beasts.js
     build: gorillaGeo, yaw: 0, length: 1.7, color: null,
     legTop: 0.36, headZ: 0.24, neckY: 0.71, tailZ: -0.7, stride: 0.12, lift: 0.08, tail: 0.0,
     walk: 1.0, run: 3.6, turn: 3, sleepChance: 0.18,
@@ -146,7 +146,8 @@ const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _up = new THREE.Vecto
 const UPY = new CANNON.Vec3(0, 1, 0);
 
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-const ACT_CHANCE = { baboon: 0.35, hippo: 0.35, lion: 0.35, penguin: 0.45, elephant: 0.35, gorilla: 0.4 };
+const ACT_CHANCE = { baboon: 0.45, hippo: 0.45, lion: 0.4, penguin: 0.5, elephant: 0.45, gorilla: 0.5 };
+const PLAY_CHANCE = { baboon: 0.35, hippo: 0.2, lion: 0.3, penguin: 0.3, elephant: 0.3, gorilla: 0.35 };
 const SWING_CHANCE = 0.4; // baboons: how often they go for the vines instead
 const NO_POSE = {};
 
@@ -362,14 +363,19 @@ class Animal {
 
   // Pick what to do next.
   decide() {
+    this.toy = null;
     if (this.kind === 'baboon' && Math.random() < SWING_CHANCE && this.startSwing()) return;
+    if (Math.random() < PLAY_CHANCE[this.kind] && this.findToy()) return;
     if (Math.random() < ACT_CHANCE[this.kind] * (this.swimming ? 1.8 : 1)) { this.startAct(); return; }
     const r = Math.random();
     if (r < this.sp.sleepChance) {
       // Hippos head for the water to nap; everyone else naps where they are or after a short walk.
       if (this.kind === 'hippo') {
-        const a = Math.random() * Math.PI * 2, d = Math.random() * POND.r * 0.6;
-        this.setState('walk', 30, [POND.x + Math.cos(a) * d, POND.z + Math.sin(a) * d]);
+        // usually up onto the island for a nap in the sun, sometimes a float in the water
+        const onIsland = Math.random() < 0.65, a = Math.random() * Math.PI * 2;
+        const d = onIsland ? Math.random() * HIPPO_ISLAND.r * 0.45 : Math.random() * POND.r * 0.6;
+        const [ox, oz] = onIsland ? [HIPPO_ISLAND.x, HIPPO_ISLAND.z] : [POND.x, POND.z];
+        this.setState('walk', 30, [ox + Math.cos(a) * d, oz + Math.sin(a) * d]);
         this.thenSleep = true;
       } else {
         this.setState('sleep', 15 + Math.random() * 30);
@@ -387,9 +393,44 @@ class Animal {
       }
       this.setState(run ? 'run' : 'walk', 25, target);
     } else {
-      this.setState('idle', 3 + Math.random() * 6);
+      this.setState('idle', 2 + Math.random() * 3.5);
       this.sniff = Math.random() < 0.5;
     }
+  }
+
+  // Go and bat a ball about, if there's one in the enclosure.
+  findToy() {
+    let best = null, bd = 18;
+    for (const it of this.game.items.list) {
+      if (!it.def.toy || this.game.grabber.entity === it) continue;
+      const p = it.body.position;
+      if (!this.region.contains(p.x, p.z)) continue;
+      const d = Math.hypot(p.x - this.x, p.z - this.z);
+      if (d < bd) { bd = d; best = it; }
+    }
+    if (!best) return false;
+    this.toy = best;
+    this.kicks = 1 + Math.floor(Math.random() * 3);
+    this.setState(Math.random() < 0.5 ? 'run' : 'walk', 10, [best.body.position.x, best.body.position.z]);
+    return true;
+  }
+
+  // Close enough to the ball: knock it along (head-butt, kick, trunk swat, flipper slap).
+  playWithToy() {
+    const it = this.toy, b = it.body;
+    if (!this.game.items.list.includes(it)) { this.toy = null; return; }
+    const p = b.position;
+    this.target = [p.x, p.z];
+    if (Math.hypot(p.x - this.x, p.z - this.z) > this.L * 0.55 + 0.45) return;
+    const power = { elephant: 7, hippo: 6, gorilla: 6, lion: 5, baboon: 4, penguin: 3 }[this.kind] || 4;
+    const a = this.yaw + (Math.random() - 0.5) * 0.8;
+    b.wakeUp();
+    b.velocity.set(Math.sin(a) * power, 2.5 + Math.random() * 3, Math.cos(a) * power);
+    b.angularVelocity.set(Math.random() * 8 - 4, Math.random() * 8 - 4, Math.random() * 8 - 4);
+    sfx.boing?.();
+    if (Math.random() < 0.4) this.say();
+    if (--this.kicks > 0) this.setState('run', 8, [p.x, p.z]);
+    else { this.toy = null; this.setState('idle', 1 + Math.random() * 2); this.hop = 1; }
   }
 
   startle(fromPos) {
@@ -509,7 +550,8 @@ class Animal {
 
     if (held) {
       // squirm round to face you, wriggling
-      b.quaternion.setFromAxisAngle(UPY, game.player.yaw + Math.sin(t * 9) * 0.25);
+      b.quaternion.setFromEuler(Math.sin(t * 13) * 0.18 - 0.1, game.player.yaw + Math.sin(t * 9) * 0.32, Math.sin(t * 11.5) * 0.22, 'YXZ'); // thrashing, glaring at you
+      if (Math.random() < dt * 1.5) game.player.shake = Math.max(game.player.shake || 0, 0.25);
       b.angularVelocity.set(0, 0, 0);
       this.shoutCd -= dt;
       if (this.shoutCd < 0) {
@@ -695,6 +737,7 @@ class Animal {
         headYaw = Math.sin(t * 0.5 + this.seed) * 0.25;
         if (this.kind === 'lion') headPitch = 0.15; // prowling, head low
         if (this.state === 'run' && this.kind === 'baboon' && this.hop <= 0 && Math.random() < dt * 1.5) this.hop = 1;
+        if (this.toy) { this.playWithToy(); if (this.state !== 'walk' && this.state !== 'run') break; if (this.timer < 0) { this.toy = null; this.setState('idle', 2); } break; }
         if (arrived || this.timer < 0) {
           if (this.thenSleep) { this.thenSleep = false; this.setState('sleep', 20 + Math.random() * 25); this.sideways = false; }
           else this.setState('idle', 2 + Math.random() * 5);
@@ -1136,17 +1179,28 @@ export async function buildAnimals(game) {
   add(hippo, hippoArea, hippos, { scale: 0.55, at: [POND.x - 2, POND.z - 2] }); // calf
   for (let i = 0; i < 4; i++) add(baboon, monkeyArea, baboons, { scale: i === 0 ? 1.15 : 0.8 + Math.random() * 0.25 });
   const penguins = [], elephants = [], gorillas = [];
-  const penguinArea = circle(PENGUIN.x, PENGUIN.z, PENGUIN.r - 1.2);
-  const elephantArea = circle(ELEPHANT.x, ELEPHANT.z, ELEPHANT.r - 2);
-  const gorillaArea = circle(GORILLA.x, GORILLA.z, GORILLA.r - 1.4);
+  // the enclosures are polygons now: keep each herd inside the shape's inner circle / square
+  const penguinArea = circle(PENGUIN.x, PENGUIN.z, PENGUIN.r * Math.cos(Math.PI / 6) - 1);
+  const elephantArea = circle(ELEPHANT.x, ELEPHANT.z, ELEPHANT.r * Math.cos(Math.PI / 4) - 1.6);
+  const ga = GORILLA.r * Math.cos(Math.PI / 4) - 1;
+  const gorillaArea = box(GORILLA.x, GORILLA.z, ga, ga);
   for (let i = 0; i < 6; i++) add(penguin, penguinArea, penguins, { scale: 0.85 + Math.random() * 0.3 });
-  add(elephant, elephantArea, elephants, { scale: 1, at: [ELEPHANT.x - 3, ELEPHANT.z + 1] });
-  add(elephant, elephantArea, elephants, { scale: 0.85, at: [ELEPHANT.x + 3, ELEPHANT.z + 2] });
+  add(elephant, elephantArea, elephants, { scale: 1, at: [ELEPHANT.x - 2, ELEPHANT.z + 1] });
+  add(elephant, elephantArea, elephants, { scale: 0.85, at: [ELEPHANT.x + 2, ELEPHANT.z + 1.5] });
   add(elephant, elephantArea, elephants, { scale: 0.42, at: [ELEPHANT.x, ELEPHANT.z - 3] }); // calf
   add(gorilla, gorillaArea, gorillas, { scale: 1.1, at: [GORILLA.x + 2, GORILLA.z + 1] });
   add(gorilla, gorillaArea, gorillas, { scale: 0.85, at: [GORILLA.x - 1, GORILLA.z + 3] });
   add(gorilla, gorillaArea, gorillas, { scale: 0.45, at: [GORILLA.x, GORILLA.z - 3] }); // baby
   game.state.animalCount = animals.list.length;
+
+  // toys: a ball or two in every enclosure
+  const toy = (x, z, scale = 1) => { const it = game.items.spawn('ball', x, heightAt(x, z) + 1.5, z, { scale }); return it; };
+  toy(MONKEY.x + 2, MONKEY.z - 2); toy(MONKEY.x - 3, MONKEY.z + 1.5, 0.8);
+  toy(LION.x + 2, LION.z - 1.5, 1.3);
+  toy(HIPPO_ISLAND.x, HIPPO_ISLAND.z, 1.6);
+  toy(PENGUIN.x + 2.5, PENGUIN.z + 1, 0.7);
+  toy(ELEPHANT.x - 1, ELEPHANT.z + 3, 2.2);
+  toy(GORILLA.x + 1, GORILLA.z - 1, 1.4);
 
   // Food left inside an enclosure gets eaten by whoever's closest and not busy.
   let foodCd = 1;

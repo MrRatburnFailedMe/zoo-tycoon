@@ -174,15 +174,18 @@ export function buildOffice(game) {
 
   // Whiteboard on the north wall.
   const wb = mesh(new THREE.PlaneGeometry(2.4, 1.25), new THREE.MeshStandardMaterial({ map: whiteboardTexture(), roughness: 0.4 }), { cast: false });
-  wb.position.set(ox + 0.3, fy + 1.65, zn + T / 2 + 0.02);
+  wb.position.set(ox + 0.3, fy + 1.65, zn + T / 2 + 0.1); // proud of the wall so it never clips into it
   scene.add(wb);
-  const frame = mesh(new THREE.BoxGeometry(2.5, 1.35, 0.03), mat(0xb0b5ba));
-  frame.position.set(ox + 0.3, fy + 1.65, zn + T / 2 + 0.005);
+  const frame = mesh(new THREE.BoxGeometry(2.5, 1.35, 0.05), mat(0xb0b5ba));
+  frame.position.set(ox + 0.3, fy + 1.65, zn + T / 2 + 0.07);
+  const tray = mesh(new THREE.BoxGeometry(2.3, 0.04, 0.1), mat(0xb0b5ba));
+  tray.position.set(ox + 0.3, fy + 0.98, zn + T / 2 + 0.12);
+  scene.add(tray);
   scene.add(frame);
 
   // Poster on the south wall.
   const poster = mesh(new THREE.PlaneGeometry(0.8, 1.05), new THREE.MeshStandardMaterial({ map: posterTexture(), roughness: 0.8 }), { cast: false });
-  poster.position.set(ox - 0.6, fy + 1.6, zs - T / 2 - 0.02);
+  poster.position.set(ox - 0.6, fy + 1.6, zs - T / 2 - 0.08);
   poster.rotation.y = Math.PI;
   scene.add(poster);
 
@@ -211,7 +214,7 @@ function whiteboardTexture() {
     ctx.font = '700 64px "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive';
     ctx.fillText('ZOO TO-DO LIST', 40, 80);
     ctx.font = '500 44px "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive';
-    const lines = ['1. Market the zoo (use the computer!)', '2. Sell tickets $$$', '3. Scoop poop → dumpster', '4. Do NOT throw coworkers', '5. Find out who fed the lion a cone'];
+    const lines = ['1. Market the zoo (use the computer!)', '2. Sell tickets $$$', '3. Scoop poop into the dumpster', '4. Do NOT throw coworkers', '5. Find out who fed the lion a cone'];
     ctx.fillStyle = '#222';
     lines.forEach((l, i) => ctx.fillText(l, 50, 160 + i * 70));
     ctx.strokeStyle = '#d33';

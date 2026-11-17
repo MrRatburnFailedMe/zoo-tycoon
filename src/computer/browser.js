@@ -114,7 +114,7 @@ export class Browser {
         t.title = u.hostname;
         t.color = '#bbb';
       }
-      this.el.lock.textContent = '\u{1F512}';
+      this.el.lock.textContent = 'S';
     } else {
       view.innerHTML = `<div class="ext-note">Real web page. Some sites refuse to load inside other pages; if this stays blank, that's why.</div>`;
       const frame = document.createElement('iframe');
@@ -124,7 +124,7 @@ export class Browser {
       view.appendChild(frame);
       t.title = u.hostname.replace(/^www\./, '');
       t.color = '#9aa4ad';
-      this.el.lock.textContent = u.protocol === 'https:' ? '\u{1F512}' : '⚠';
+      this.el.lock.textContent = u.protocol === 'https:' ? 'S' : '!';
     }
     view.scrollTop = 0;
     this.el.addr.value = display(url);

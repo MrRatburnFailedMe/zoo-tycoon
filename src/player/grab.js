@@ -7,10 +7,12 @@ import { sfx } from '../audio.js';
 const FOLLOW = 14; // how fast a held thing catches up with the carry spot (1/s)
 const MAX_SPEED = 12; // fast enough to keep up, slow enough not to tunnel through walls
 const MIN_REACH = 1.1, MAX_REACH = 2.6;
-const COLLAR = new CANNON.Vec3(0, 0.26, 0); // where a friend is held: the back of the collar, on the torso
+const COLLAR = new CANNON.Vec3(0, 0.26, 0);
+const FACE_UP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2); // item +Y toward the viewer
+const _q = new THREE.Quaternion(); // where a friend is held: the back of the collar, on the torso
 
-// Carrying: hold the left mouse button on something to pick it up, keep holding to carry it, let go
-// to drop it, right-click to throw. Things float at a fixed spot in front of you (they still bump into walls).
+// Carrying: click something to pick it up, click again to put it down. Hold Q to wind up a throw
+// (longer = harder, up to ~1.1 s) and let go of Q to throw. Animals are held right up in your face. Things float at a fixed spot in front of you (they still bump into walls).
 // A friend is held by the collar with a joint instead, so gravity still works on the rest of them:
 // arms and legs dangle and swing as you move.
 export class Grabber {
@@ -23,6 +25,8 @@ export class Grabber {
     this.dir = new THREE.Vector3();
     this.stuck = 0;
     this.saved = [];
+    this.charge = 0; // 0..1 while Q is held
+    this.charging = false;
     // invisible "hand" the collar joint hangs from, moved to the carry spot every step
     this.hand = new CANNON.Body({ type: CANNON.Body.KINEMATIC, mass: 0, collisionFilterGroup: 0, collisionFilterMask: 0, allowSleep: false });
     this.joint = null;
@@ -37,13 +41,26 @@ export class Grabber {
 
     if (this.held) {
       if (!this.held.world) return this.release();
-      if (!input.mouseDown(0)) return this.release();
-      if (input.mousePressed(2)) return this.throw();
+      if (input.mousePressed(0)) return this.release();
+      if (input.down('KeyQ')) {
+        if (!this.charging) { this.charging = true; this.charge = 0; }
+        this.charge = Math.min(1, this.charge + (1 / 60) / 1.1);
+      } else if (this.charging) return this.throw(this.charge);
       if (input.justPressed('KeyF') && this.entity.use) this.entity.use(this);
+      // R: bring it up close and turn its face to you (read a ticket, admire a banana)
+      this.inspecting = input.down('KeyR') && !this.ragdoll && !this.isAnimal;
+      // animals are held with their face at your eye level (tall ones lower down), everything else a bit low
+      const face = this.isAnimal ? -Math.max(0, (this.entity.H || 0.5) * 0.32 - 0.1) : this.inspecting ? 0 : -0.15;
+      const dist = this.inspecting ? 0.3 + (this.held.boundingRadius || 0.1) : this.dist;
       this.target.set(
-        camera.position.x + this.dir.x * this.dist,
-        camera.position.y + this.dir.y * this.dist - 0.15,
-        camera.position.z + this.dir.z * this.dist);
+        camera.position.x + this.dir.x * dist,
+        camera.position.y + this.dir.y * dist + face,
+        camera.position.z + this.dir.z * dist);
+      if (this.inspecting) {
+        _q.copy(camera.quaternion).multiply(FACE_UP);
+        this.held.quaternion.slerp(new CANNON.Quaternion(_q.x, _q.y, _q.z, _q.w), 0.3, this.held.quaternion);
+        this.held.angularVelocity.set(0, 0, 0);
+      }
       // Wedged behind something for a moment: drop it rather than fight the wall.
       this.stuck = this.held.position.distanceTo(this.target) > 1.8 ? this.stuck + 1 / 60 : 0;
       if (this.stuck > 0.5) { sfx.snap(); this.release(); }
@@ -64,6 +81,11 @@ export class Grabber {
     if (hit.entity.ragdoll) this.held = hit.entity.ragdoll.torso;
     const radius = this.held.boundingRadius || 0.3;
     this.dist = clamp(1.15 + radius, MIN_REACH, MAX_REACH);
+    this.charging = false;
+    this.charge = 0;
+    // Animals get held right up to your face so you can see how furious they are.
+    this.isAnimal = !!this.entity.updateHeld;
+    if (this.isAnimal) this.dist = 0.42 + (this.entity.L || 0.6) * 0.45;
     // Nothing you carry should shove you around (all of a ragdoll's parts included).
     const bodies = hit.entity.ragdoll ? Object.values(hit.entity.ragdoll.bodies) : [this.held];
     this.saved = bodies.map((b) => [b, b.collisionFilterMask, b.angularDamping]);
@@ -98,6 +120,8 @@ export class Grabber {
       this.joint = null;
     }
     this.ragdoll = null;
+    this.charging = false;
+    this.isAnimal = false;
     const v = b.velocity.length();
     if (v > 10) b.velocity.scale(10 / v, b.velocity);
     this.held = null;
@@ -105,10 +129,10 @@ export class Grabber {
     sfx.drop();
   }
 
-  throw() {
+  throw(power = 0.6) {
     const b = this.held, e = this.entity;
     this.release();
-    const speed = clamp(15 - b.mass * 0.7, 4, 15) * this.game.mods.throwPower;
+    const speed = clamp(15 - b.mass * 0.7, 4, 15) * (0.3 + power * 1.1) * this.game.mods.throwPower;
     if (e.onThrow) e.onThrow(this.dir, speed);
     else {
       b.velocity.x += this.dir.x * speed;

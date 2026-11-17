@@ -23,31 +23,31 @@ const INDEX = [
 ];
 
 export function notFound(host) {
-  return `<div class="nf"><div class="big">🐧</div><h2>This site can't be reached</h2>
+  return `<div class="nf"><div class="big">404</div><h2>This site can't be reached</h2>
     <p><b>${esc(host)}</b> isn't on the Zoonet. Try <a data-href="zoogle.zoo">Zoogle</a>, or type a real address like <i>wikipedia.org</i>.</p></div>`;
 }
 
 const LOGO = '<div class="zg-logo"><span>Z</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>';
 
 const CAMPAIGNS = [
-  { id: 'flyer', icon: '📄', name: 'Photocopied Flyers', cost: 50, hype: 8, blurb: 'Staple them to every lamppost in town. Some may be upside down.' },
-  { id: 'radio', icon: '📻', name: 'Local Radio Jingle', cost: 150, hype: 25, blurb: '30 seconds of a guy yelling "ZOO!" over a kazoo.' },
-  { id: 'billboard', icon: '🪧', name: 'Highway Billboard', cost: 400, hype: 70, blurb: 'A giant lion pointing at the exit ramp. Very persuasive.' },
-  { id: 'goat', icon: '🐐', name: 'Influencer Goat', cost: 1000, hype: 200, blurb: 'A goat with 2M followers visits the zoo. Results not guaranteed.' },
+  { id: 'flyer', icon: 'FL', name: 'Photocopied Flyers', cost: 50, hype: 8, blurb: 'Staple them to every lamppost in town. Some may be upside down.' },
+  { id: 'radio', icon: 'RA', name: 'Local Radio Jingle', cost: 150, hype: 25, blurb: '30 seconds of a guy yelling "ZOO!" over a kazoo.' },
+  { id: 'billboard', icon: 'BB', name: 'Highway Billboard', cost: 400, hype: 70, blurb: 'A giant lion pointing at the exit ramp. Very persuasive.' },
+  { id: 'goat', icon: 'GT', name: 'Influencer Goat', cost: 1000, hype: 200, blurb: 'A goat with 2M followers visits the zoo. Results not guaranteed.' },
 ];
 
 // ZooMart catalogue: item type → price. Orders arrive by truck at the front gate.
 export const PRODUCTS = [
-  { type: 'feed', icon: '🌾', price: 30, desc: 'Feeds anything. Drop it in an enclosure.' },
-  { type: 'fish', icon: '🐟', price: 20, desc: 'Penguins go wild for it.' },
-  { type: 'bananas', icon: '🍌', price: 15, desc: 'Monkeys, gorillas, you.' },
-  { type: 'haybale', icon: '🟨', price: 20, desc: 'Elephant and hippo snacks.' },
-  { type: 'spray', icon: '🧴', price: 25, desc: 'Press F to dissolve nearby poop.' },
-  { type: 'glasskit', icon: '🪟', price: 80, desc: 'Press F to fix every smashed pane.' },
-  { type: 'ball', icon: '🏐', price: 10, desc: 'Bouncy. Throwable. Irresistible.' },
-  { type: 'cone', icon: '🚧', price: 5, desc: 'Look official.' },
-  { type: 'plant', icon: '🪴', price: 15, desc: 'Brightens up the place.' },
-  { type: 'megaphone', icon: '📣', price: 40, desc: 'Yell at people for hype.' },
+  { type: 'feed', icon: 'FD', price: 30, desc: 'Feeds anything. Drop it in an enclosure.' },
+  { type: 'fish', icon: 'FS', price: 20, desc: 'Penguins go wild for it.' },
+  { type: 'bananas', icon: 'BN', price: 15, desc: 'Monkeys, gorillas, you.' },
+  { type: 'haybale', icon: 'HY', price: 20, desc: 'Elephant and hippo snacks.' },
+  { type: 'spray', icon: 'SP', price: 25, desc: 'Press F to dissolve nearby poop.' },
+  { type: 'glasskit', icon: 'GK', price: 80, desc: 'Press F to fix every smashed pane.' },
+  { type: 'ball', icon: 'BL', price: 10, desc: 'Bouncy. Throwable. Irresistible.' },
+  { type: 'cone', icon: 'CN', price: 5, desc: 'Look official.' },
+  { type: 'plant', icon: 'PL', price: 15, desc: 'Brightens up the place.' },
+  { type: 'megaphone', icon: 'MG', price: 40, desc: 'Yell at people for hype.' },
 ];
 const cart = {};
 
@@ -57,7 +57,7 @@ export const SITES = {
     title: () => 'ZooMart: Shop',
     render(u, { state, game }) {
       const names = Object.fromEntries(PRODUCTS.map((p) => [p.type, game.itemName(p.type)]));
-      return `<div class="zm"><h1>🛒 ZooMart</h1><p>Everything a zoo needs. Delivered to your front gate in 10–15 seconds by a very fast truck.</p>
+      return `<div class="zm"><h1>ZooMart</h1><p>Everything a zoo needs. Delivered to your front gate in 10–15 seconds by a very fast truck.</p>
         <div class="zm-wrap">
           <div class="zm-grid">${PRODUCTS.map((p) => `<div class="zm-card"><div class="ic">${p.icon}</div><h3>${esc(names[p.type])}</h3><p>${esc(p.desc)}</p><button data-add="${p.type}">Add · ${money(p.price)}</button></div>`).join('')}</div>
           <div class="zm-cart"><h3>Your cart</h3><div class="zm-rows"></div>
@@ -122,7 +122,7 @@ export const SITES = {
         </div>`;
       }
       return `<div class="zg-home">${LOGO}
-        <form class="zg-search"><span>🔍</span><input name="q" placeholder="Search the Zoonet or type a URL" /></form>
+        <form class="zg-search"><span>Go</span><input name="q" placeholder="Search the Zoonet or type a URL" /></form>
         <div class="zg-btns"><button type="button" class="zg-go">Zoogle Search</button><button type="button" class="zg-wild">I'm Feeling Wild</button></div>
         <div class="zg-quick">${BOOKMARKS.slice(1).map((b) => `<div data-href="${b.url}"><i style="background:${b.color}">${b.name[0]}</i>${b.name}</div>`).join('')}</div>
       </div>`;

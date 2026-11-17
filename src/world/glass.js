@@ -40,39 +40,101 @@ export class Glass {
     body.addEventListener('collide', (e) => {
       const o = e.body;
       if (pane.broken || o.mass < 0.2 || o === game.player.body) return;
-      if (Math.abs(e.contact.getImpactVelocityAlongNormal()) > BREAK_SPEED) this.pending.push({ pane, v: o.velocity.clone() });
+      if (Math.abs(e.contact.getImpactVelocityAlongNormal()) > BREAK_SPEED) this.pending.push({ pane, v: o.velocity.clone(), at: o.position.clone() });
     });
     this.panes.push(pane);
     return pane;
   }
 
   // Bodies can't be removed in the middle of a physics step, so breaks are applied afterwards.
-  smash(pane, v = new CANNON.Vec3()) {
+  // Shatter from the impact point: jagged spokes and rings of cracks cut the pane into real
+  // polygon shards. Inner shards fall out; some outer ones stay stuck in the frame until it's fixed.
+  smash(pane, v = new CANNON.Vec3(), at = null) {
     if (pane.broken) return;
     pane.broken = true;
     pane.timer = REPAIR_AFTER;
     pane.m.visible = false;
     this.game.world.removeBody(pane.body);
-    const p = pane.m.position;
+    const p = pane.m.position, hw = pane.w / 2, hh = pane.h / 2;
     sfx.glass(this.loud(p));
-    const n = Math.min(40, Math.round(pane.w * pane.h * 4) + 12);
-    const along = new THREE.Vector3(Math.sin(pane.yaw), 0, Math.cos(pane.yaw));
-    for (let i = 0; i < n; i++) {
-      const s = new THREE.Mesh(shardGeo, shardMat);
-      s.position.copy(p).addScaledVector(along, (Math.random() - 0.5) * pane.w).add(new THREE.Vector3(0, (Math.random() - 0.5) * pane.h, 0));
-      s.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-      s.scale.setScalar(0.6 + Math.random() * 1.6);
+    const along = new THREE.Vector3(Math.sin(pane.yaw), 0, Math.cos(pane.yaw)), up = new THREE.Vector3(0, 1, 0);
+    // impact point in pane coordinates (u along the width, v up)
+    let cu = (Math.random() - 0.5) * pane.w * 0.4, cv = (Math.random() - 0.5) * pane.h * 0.4;
+    if (at) {
+      const d = new THREE.Vector3(at.x - p.x, at.y - p.y, at.z - p.z);
+      cu = THREE.MathUtils.clamp(d.dot(along), -hw * 0.8, hw * 0.8);
+      cv = THREE.MathUtils.clamp(d.y, -hh * 0.8, hh * 0.8);
+    }
+    const J = (a) => (Math.random() - 0.5) * a;
+    // spokes
+    const K = 9 + Math.floor(Math.random() * 5);
+    const angs = [];
+    for (let i = 0; i < K; i++) angs.push(((i + 0.5 + J(0.7)) / K) * Math.PI * 2);
+    // distance from the impact to the frame along each spoke
+    const toEdge = (a) => {
+      const dx = Math.cos(a), dy = Math.sin(a);
+      const tx = dx > 0 ? (hw - cu) / dx : dx < 0 ? (-hw - cu) / dx : Infinity;
+      const ty = dy > 0 ? (hh - cv) / dy : dy < 0 ? (-hh - cv) / dy : Infinity;
+      return Math.min(tx, ty);
+    };
+    const size = Math.min(pane.w, pane.h);
+    const rings = [size * (0.08 + Math.random() * 0.06), size * (0.25 + Math.random() * 0.12), size * (0.5 + Math.random() * 0.2)];
+    const pt = (a, r) => [cu + Math.cos(a) * r, cv + Math.sin(a) * r];
+    const grid = angs.map((a) => {
+      const e = toEdge(a);
+      const pts = rings.map((r) => pt(a + J(0.25), Math.min(r * (0.8 + Math.random() * 0.4), e * 0.92)));
+      return [...pts, pt(a, e)];
+    });
+    const corners = [[hw, hh], [-hw, hh], [-hw, -hh], [hw, -hh]];
+    const between = (a0, a1, c) => {
+      let ca = Math.atan2(c[1] - cv, c[0] - cu);
+      while (ca < a0) ca += Math.PI * 2;
+      return ca < a1;
+    };
+    const polys = [];
+    for (let i = 0; i < K; i++) {
+      const A = grid[i], B = grid[(i + 1) % K];
+      polys.push({ pts: [[cu + J(0.02), cv + J(0.02)], A[0], B[0]], outer: false });
+      for (let j = 0; j < rings.length - 1; j++) {
+        // split each band cell diagonally now and then for extra jaggedness
+        if (Math.random() < 0.5) { polys.push({ pts: [A[j], A[j + 1], B[j + 1]], outer: false }); polys.push({ pts: [A[j], B[j + 1], B[j]], outer: false }); }
+        else polys.push({ pts: [A[j], A[j + 1], B[j + 1], B[j]], outer: false });
+      }
+      const last = rings.length - 1;
+      const a0 = angs[i], a1 = i + 1 < K ? angs[i + 1] : angs[0] + Math.PI * 2;
+      const edge = [A[last], A[last + 1]];
+      for (const c of corners) if (between(a0, a1, c)) edge.push(c);
+      edge.push(B[last + 1], B[last]);
+      polys.push({ pts: edge, outer: true });
+    }
+    pane.stuck = [];
+    for (const { pts, outer } of polys) {
+      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+      const pos = [];
+      for (let k = 1; k < pts.length - 1; k++) for (const q of [pts[0], pts[k], pts[k + 1]]) {
+        const w = along.clone().multiplyScalar(q[0] - cx).addScaledVector(up, q[1] - cy);
+        pos.push(w.x, w.y, w.z);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.computeVertexNormals();
+      const s = new THREE.Mesh(geo, shardMat);
+      s.position.copy(p).addScaledVector(along, cx).addScaledVector(up, cy);
       this.game.scene.add(s);
+      if (outer && Math.random() < 0.55) { pane.stuck.push(s); continue; } // left jagged in the frame
+      const out = Math.max(0.2, 1.2 - Math.hypot(cx - cu, cy - cv) / size); // pieces near the hit fly furthest
       this.shards.push({
-        s, life: 2.5 + Math.random(),
-        v: new THREE.Vector3(v.x * 0.3 + (Math.random() - 0.5) * 3, Math.random() * 2.5, v.z * 0.3 + (Math.random() - 0.5) * 3),
-        spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10),
+        s, life: 2.5 + Math.random() * 1.5,
+        v: new THREE.Vector3(v.x * 0.35 * out + J(2.5), Math.random() * 1.5, v.z * 0.35 * out + J(2.5)),
+        spin: new THREE.Vector3(J(14), J(14), J(14)),
       });
     }
     this.game.animals?.shout('CRASH!', p.x, p.y + pane.h / 2 + 0.3, p.z, '#bfeaff');
   }
 
   repair(pane) {
+    for (const s of pane.stuck || []) { this.game.scene.remove(s); s.geometry.dispose(); }
+    pane.stuck = [];
     pane.broken = false;
     pane.m.visible = true;
     this.game.world.addBody(pane.body);
@@ -87,7 +149,7 @@ export class Glass {
   loud(p) { return Math.max(0.15, 1 - this.game.camera.position.distanceTo(p) / 50); }
 
   update(dt) {
-    for (const { pane, v } of this.pending) this.smash(pane, v);
+    for (const { pane, v, at } of this.pending) this.smash(pane, v, at);
     this.pending.length = 0;
     for (const p of this.panes) {
       if (!p.broken) continue;
@@ -103,8 +165,8 @@ export class Glass {
       sh.v.y -= 9.8 * dt;
       sh.s.position.addScaledVector(sh.v, dt);
       if (sh.s.position.y < this.groundY(sh.s.position)) { sh.s.position.y = this.groundY(sh.s.position); sh.v.multiplyScalar(0.3); sh.v.y = Math.abs(sh.v.y) * 0.2; }
-      else sh.s.rotation.x += sh.spin.x * dt, sh.s.rotation.y += sh.spin.y * dt;
-      if (sh.life <= 0) { this.game.scene.remove(sh.s); this.shards.splice(i, 1); }
+      else { sh.s.rotation.x += sh.spin.x * dt; sh.s.rotation.y += sh.spin.y * dt; sh.s.rotation.z += sh.spin.z * dt; }
+      if (sh.life <= 0) { this.game.scene.remove(sh.s); sh.s.geometry.dispose(); this.shards.splice(i, 1); }
     }
   }
 

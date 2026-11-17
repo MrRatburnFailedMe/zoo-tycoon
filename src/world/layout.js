@@ -5,11 +5,10 @@ export const PLAZA = { x: 0, z: 8, r: 8 };
 export const OFFICE = { x: -19, z: 19, w: 11, d: 8 }; // door on the east (+X) wall
 export const GATE = { x: 0, z: 52 };
 export const PERIMETER_R = 52;
-// Front gate: turnstiles across the middle, the ticket desk booth on the east side, an ATM inside.
+// Front gate: three tight turnstile lanes in the middle, the ticket booth on the east side.
 export const TICKET_BOOTH = { x: 7, z: 52 };
 export const GATE_W = 19; // width of the opening in the perimeter fence
-export const TURNSTILES = [-2.6, 0, 2.6]; // lane x positions, at GATE.z
-export const ATM = { x: 7.2, z: 46.5 };
+export const TURNSTILES = [-1.2, 0, 1.2]; // lane x positions, at GATE.z (lanes are 0.85 m wide)
 export const TRUCK_BAY = { x: -1.2, z: 61 }; // where delivery trucks park (rear doors facing the gate)
 export const CART_SPAWN = { x: 4.5, z: 36 };
 export const DUMPSTER = { x: -16, z: 26.6 };
@@ -19,6 +18,8 @@ export const DUMPSTER = { x: -16, z: 26.6 };
 export const HIPPO = { id: 'hippo', name: 'HIPPO SWAMP', x: 27, z: -4, r: 12, depth: 4.6, waterR: 7.2, deckAngle: Math.PI * 0.93 };
 // The water body the player/items float in (kept as POND so physics code stays generic).
 export const POND = { x: HIPPO.x - 0.8, z: HIPPO.z, r: HIPPO.waterR };
+// a muddy island in the middle of the pond the hippos haul out onto and nap on
+export const HIPPO_ISLAND = { x: POND.x + 0.6, z: POND.z + 0.4, r: 2.3 };
 
 // Monkey house: a glass box with a lattice roof, on the north crest.
 export const MONKEY = { id: 'monkey', name: 'MONKEY HOUSE', x: -1, z: -31, w: 24, d: 16, h: 7, r: 15 };
@@ -89,10 +90,10 @@ export const PATHS = [
 export const FLATTEN = [
   { x: OFFICE.x, z: OFFICE.z, r: 8.5, blend: 5 },
   { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, blend: 6 },
-  { x: GATE.x + 2, z: GATE.z + 2, r: 10, blend: 6 }, // one level forecourt: turnstiles, ticket booth and the queue
+  { x: GATE.x + 2, z: GATE.z + 3, r: 10, blend: 20 }, // one level forecourt: turnstiles, ticket booth and the queue
   { x: HIPPO.x, z: HIPPO.z, r: HIPPO.r + 1.5, blend: 4 },
   { x: MONKEY.x, z: MONKEY.z, r: 14.5, blend: 5 },
-  { x: TRUCK_BAY.x, z: TRUCK_BAY.z + 5, r: 4, blend: 6 }, // truck bay
+  { x: TRUCK_BAY.x, z: TRUCK_BAY.z + 4, r: 6, blend: 16 }, // truck bay
   { x: PENGUIN.x, z: PENGUIN.z, r: PENGUIN.r + 1.5, blend: 4 },
   { x: ELEPHANT.x, z: ELEPHANT.z, r: ELEPHANT.r + 1.5, blend: 5 },
   { x: GORILLA.x, z: GORILLA.z, r: GORILLA.r + 1.5, blend: 4 },
@@ -129,7 +130,6 @@ export function isOpenGround(x, z, margin = 1.5) {
   if (Math.hypot(x - LION.x, z - LION.z) < LION.r + margin) return false;
   if (inMonkeyHouse(x, z, margin + 1.5)) return false;
   for (const e of [PENGUIN, ELEPHANT, GORILLA]) if (Math.hypot(x - e.x, z - e.z) < e.r + 1 + margin) return false;
-  if (Math.hypot(x - ATM.x, z - ATM.z) < 2 + margin) return false;
   const r = Math.hypot(x, z);
   if (Math.abs(r - PERIMETER_R) < margin + 0.5) return false;
   return true;

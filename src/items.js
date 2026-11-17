@@ -46,7 +46,7 @@ function ticketTexture() {
     word('ZOO TYCOON', 325, 92, 62, '#fff', -0.04);
     word('ADMIT ONE', 325, 160, 46, '#7cd05a', 0.03);
     g.font = '700 20px Inter, system-ui'; g.fillStyle = INK;
-    g.fillText('NO REFUNDS · NO LION RIDES', 325, 210);
+    
   });
   return ticketTex;
 }
@@ -65,8 +65,8 @@ export const ITEMS = {
     },
   },
   ball: {
-    name: 'Beach Ball', mass: 0.5, material: 'bouncy', sound: 'ball', linearDamping: 0.15, angularDamping: 0.2,
-    build() {
+    name: 'Beach Ball', mass: 0.5, material: 'bouncy', sound: 'ball', linearDamping: 0.15, angularDamping: 0.2, toy: true,
+    build({ scale = 1 } = {}) {
       const geo = new THREE.IcosahedronGeometry(0.35, 1);
       const pos = geo.attributes.position;
       const cols = [0xe74c3c, 0xffffff, 0x3498db, 0xf1c40f, 0xffffff, 0x2ecc71].map((c) => new THREE.Color(c));
@@ -80,7 +80,8 @@ export const ITEMS = {
       }
       const g = new THREE.Group();
       g.add(mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.35 })));
-      return { group: g, shapes: [{ shape: new CANNON.Sphere(0.35) }] };
+      g.scale.setScalar(scale);
+      return { group: g, shapes: [{ shape: new CANNON.Sphere(0.35 * scale) }], radius: 0.35 * scale };
     },
   },
   cone: {
@@ -226,11 +227,60 @@ export const ITEMS = {
   },
   cash: {
     name: 'Cash', mass: 0.3, sound: 'soft',
+    // a fan of zoo dollars: one note per bill in the amount ($20 lion, $10 elephant, $5 penguin, $1 monkey)
+    build({ value = 20 } = {}) {
+      const g = new THREE.Group();
+      const notes = [];
+      let left = value;
+      for (const d of [100, 50, 20, 10, 5, 1]) while (left >= d && notes.length < 6) { notes.push(d); left -= d; }
+      const COL = { 100: 0x9a6bd6, 50: 0xe2523c, 20: 0xf2a33a, 10: 0x6f8fb8, 5: 0x2fb3a8, 1: 0x6fbf5a };
+      notes.forEach((d, i) => {
+        const n = add(g, B(0.2, 0.008, 0.1), COL[d], 0, i * 0.009, 0);
+        n.rotation.y = (i - notes.length / 2) * 0.12;
+        add(g, B(0.05, 0.009, 0.05), 0xfff3c4, 0, i * 0.009 + 0.001, 0).rotation.y = n.rotation.y;
+      });
+      return { group: g, shapes: [{ shape: box(0.1, 0.025, 0.05) }], radius: 0.1 };
+    },
+  },
+  parcel: {
+    name: 'ZooMart box', mass: 4, sound: 'soft', useLabel: 'Open box',
     build() {
       const g = new THREE.Group();
-      for (let i = 0; i < 4; i++) add(g, B(0.2, 0.012, 0.1), i % 2 ? 0x6fbf5a : 0x5aa847, 0, i * 0.012, 0).rotation.y = (i - 1.5) * 0.06;
-      add(g, B(0.05, 0.06, 0.104), 0xffd34d, 0, 0.018, 0);
-      return { group: g, shapes: [{ shape: box(0.1, 0.03, 0.05) }], radius: 0.1 };
+      add(g, B(0.56, 0.44, 0.48), 0xc69c62, 0, 0, 0, { roughness: 0.95 });
+      add(g, B(0.565, 0.012, 0.09), 0x2fb38a, 0, 0.222, 0); // tape across the lid
+      add(g, B(0.09, 0.445, 0.485), 0x2fb38a, 0, 0, 0); // tape round the middle
+      add(g, B(0.12, 0.002, 0.12), 0xfff3c4, -0.18, 0.223, 0.14); // shipping label
+      for (const sx of [-1, 1]) add(g, B(0.005, 0.05, 0.16), 0x8a6a45, sx * 0.281, 0.12, 0); // hand holes
+      return { group: g, shapes: [{ shape: box(0.28, 0.22, 0.24) }], radius: 0.35 };
+    },
+    use(game, item) {
+      const p = item.body.position, t = item.contents || 'ball';
+      game.grabber.release();
+      game.items.remove(item);
+      sfx.drop();
+      const it = game.items.spawn(t, p.x, p.y + 0.3, p.z);
+      it.body.velocity.set(0, 2.5, 0);
+      // the empty box flattens into cardboard litter
+      game.items.spawn('cardboard', p.x + 0.3, p.y, p.z);
+    },
+  },
+  cardboard: {
+    name: 'Flattened box', mass: 0.6, sound: 'soft', trash: true,
+    build() {
+      const g = new THREE.Group();
+      add(g, B(0.7, 0.03, 0.5), 0xc69c62, 0, 0, 0, { roughness: 1 });
+      add(g, B(0.7, 0.032, 0.08), 0x2fb38a, 0, 0, 0);
+      return { group: g, shapes: [{ shape: box(0.35, 0.02, 0.25) }], radius: 0.35 };
+    },
+  },
+  card: {
+    name: 'Bank card', mass: 0.05, sound: 'soft', linearDamping: 0.4, angularDamping: 0.6,
+    build({ color = 0x3f78c2 } = {}) {
+      const g = new THREE.Group();
+      add(g, B(0.086, 0.004, 0.054), color, 0, 0, 0, { metalness: 0.3, roughness: 0.4 });
+      add(g, B(0.016, 0.005, 0.012), 0xd4b14a, -0.022, 0, 0.008, { metalness: 0.8, roughness: 0.3 }); // chip
+      add(g, B(0.086, 0.005, 0.01), 0x111111, 0, -0.0005, -0.018); // stripe
+      return { group: g, shapes: [{ shape: box(0.043, 0.004, 0.027) }], radius: 0.06 };
     },
   },
   feed: {
@@ -285,7 +335,7 @@ export const ITEMS = {
         game.items.remove(it);
         n++;
       }
-      if (n) { sfx.cash(); game.animals.shout(`✨ +${n} clean`, p.x, p.y + 0.6, p.z, '#9fe0ff'); }
+      if (n) { sfx.cash(); game.animals.shout(`+${n} clean`, p.x, p.y + 0.6, p.z, '#9fe0ff'); }
       else game.animals.shout('pssht', p.x, p.y + 0.4, p.z, '#9fe0ff');
     },
   },
@@ -407,7 +457,7 @@ export class Items {
     game.state.setPoop(this.count('poop'));
     for (const it of binned) {
       sfx.cash();
-      game.hud.toast(`Binned ${it.label.toLowerCase()} → cleanliness ${game.state.cleanliness}%`, 'info');
+      game.hud.toast(`Binned ${it.label.toLowerCase()}, cleanliness ${game.state.cleanliness}%`, 'info');
     }
   }
 }
