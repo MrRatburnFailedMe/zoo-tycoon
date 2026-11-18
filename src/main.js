@@ -9,6 +9,7 @@ import { buildTerrain } from './world/terrain.js';
 import { buildNature } from './world/nature.js';
 import { buildZoo } from './world/zoo.js';
 import { buildOffice } from './world/office.js';
+import { buildBathroom } from './world/bathroom.js';
 import { buildExhibits } from './world/exhibits.js';
 import { Items, spawnStarterItems, ITEMS } from './items.js';
 import { Player } from './player/player.js';
@@ -56,7 +57,7 @@ const game = {
   uniforms: { time: { value: 0 } },
   mods: { ...DEFAULT_MODS },
   mode: 'menu', // menu | play | computer | resuming | feedback
-  version: '0.9.0',
+  version: '0.10.0',
   time: 0,
 };
 window.game = game;
@@ -75,6 +76,7 @@ game.items = new Items(game);
 game.itemName = (type) => ITEMS[type]?.name || type;
 game.computer = new Computer(game);
 game.office = buildOffice(game);
+buildBathroom(game);
 game.gate = buildGate(game);
 game.player = new Player(game, { x: GATE.x, z: GATE.z - 6, yaw: 0 });
 game.grabber = new Grabber(game);

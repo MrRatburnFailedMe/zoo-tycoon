@@ -6,13 +6,18 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { clamp, damp } from '../util/math.js';
 import { heightAt } from './terrain.js';
 import { sfx } from '../audio.js';
+import { loadGLB } from '../util/glb.js';
 
-// A golf cart for zipping around the park. E to hop in or out, WASD to drive, Space to honk.
+// A golf cart for zipping around the park (model: Eric Wilson, Poly Pizza). Click to hop in, click or
+// E to hop out, WASD to drive, Space to honk. Click it while carrying a friend to sit them in the
+// passenger seat; drop things in the back and they ride along.
 // It's a heavy box that slides on the ground (no wheel physics); the body is kept level and the
 // mesh tilts to follow the slope. Friends and loose items get bowled over.
 
 const MAX_FWD = 9, MAX_REV = 4, ACCEL = 5, BRAKE = 12, WHEELBASE = 1.7;
-const SEAT = new THREE.Vector3(-0.3, 0.98, 0.15); // driver's seat, where the player's body centre sits
+const SEAT = new THREE.Vector3(0.33, 0.92, -0.15); // driver's seat (left side), where the player's body centre sits
+const PASSENGER = new THREE.Vector3(-0.33, 1.12, -0.22); // where a seated friend's chest is pinned
+const BED = { x: 0.55, z0: -1.3, z1: -0.62, y0: 0.55, y1: 1.6 }; // cargo area behind the seat (local)
 
 export class GolfCart {
   constructor(game, x, z, yaw = 0) {
@@ -37,6 +42,35 @@ export class GolfCart {
     game.world.addEventListener('preStep', () => this.preStep());
     this.root.traverse((o) => (o.userData.entity = this));
     game.pickables.push(this.root);
+    this.passenger = null;
+    this.cargo = new Map(); // item -> local offset
+    this.loadModel();
+  }
+
+  get interactLabel() {
+    const e = this.game.grabber.entity;
+    if (e?.ragdoll) return this.passenger ? 'Seat is taken' : 'Seat passenger';
+    if (e) return 'Put in the back';
+    return 'Drive';
+  }
+  set interactLabel(_) {}
+
+  async loadModel() {
+    let gl;
+    try { gl = await loadGLB('assets/golfcart.glb'); } catch { return; }
+    const m = gl.scene;
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.entity = this; } });
+    m.rotation.y = Math.PI / 2; // the model drives toward -X; ours toward +Z
+    m.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3());
+    const k = 2.5 / size.z;
+    const holder = new THREE.Group();
+    holder.add(m);
+    holder.scale.setScalar(k);
+    holder.position.set(-((bb.min.x + bb.max.x) / 2) * k, -bb.min.y * k, -((bb.min.z + bb.max.z) / 2) * k);
+    for (const c of [...this.tilt.children]) c.visible = false; // retire the box cart
+    this.tilt.add(holder);
+    this.model = holder;
   }
 
   buildMesh() {
@@ -103,7 +137,51 @@ export class GolfCart {
     this.game.scene.add(g);
   }
 
-  interact() { if (!this.driving) this.enter(); }
+  interact() {
+    const g = this.game, e = g.grabber.entity;
+    if (e?.ragdoll) { if (!this.passenger) this.seat(e); return; }
+    if (e?.body && e.type) { // anything else you're carrying goes in the back
+      g.grabber.release();
+      const n = this.cargo.size;
+      const local = new THREE.Vector3(((n % 2) - 0.5) * 0.5, BED.y0 + 0.35 + Math.floor(n / 4) * 0.4, BED.z0 + 0.2 + (Math.floor(n / 2) % 2) * 0.35);
+      this.cargo.set(e, local);
+      sfx.drop();
+      return;
+    }
+    if (!this.driving) this.enter();
+  }
+
+  // A carried friend plops into the passenger seat, pinned there by the chest and hips.
+  seat(friend) {
+    const g = this.game;
+    g.grabber.release();
+    this.passenger = friend;
+    friend.seatedIn = this;
+    const rb = friend.ragdoll.bodies;
+    this.saved = Object.values(rb).map((b) => [b, b.collisionFilterMask]);
+    for (const b of Object.values(rb)) b.collisionFilterMask &= ~G.ITEM;
+    const at = (v) => new CANNON.Vec3(v.x, v.y, v.z);
+    const torso = friend.ragdoll.torso;
+    const seatW = PASSENGER.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw).add(this.body.position);
+    torso.position.set(seatW.x, seatW.y, seatW.z);
+    this.pins = [new CANNON.PointToPointConstraint(this.body, at(PASSENGER), torso, new CANNON.Vec3(0, 0, 0), 4000)];
+    for (const leg of ['upperLegL', 'upperLegR']) if (rb[leg]) {
+      const knee = PASSENGER.clone().add(new THREE.Vector3(leg.endsWith('L') ? 0.12 : -0.12, -0.25, 0.4));
+      this.pins.push(new CANNON.PointToPointConstraint(this.body, at(knee), rb[leg], new CANNON.Vec3(0, -0.15, 0), 1500));
+    }
+    for (const c of this.pins) g.world.addConstraint(c);
+    sfx.click();
+  }
+
+  unseat() {
+    const f = this.passenger;
+    if (!f) return;
+    for (const c of this.pins) this.game.world.removeConstraint(c);
+    for (const [b, m] of this.saved) b.collisionFilterMask = m;
+    f.seatedIn = null;
+    this.passenger = null;
+    this.pins = [];
+  }
 
   enter() {
     const g = this.game;
@@ -111,6 +189,8 @@ export class GolfCart {
     this.driving = true;
     this.justEntered = true; // the same E press must not also hop straight back out
     g.player.driving = this;
+    g.player.yaw = this.yaw + Math.PI; // look out the front
+    g.player.pitch = -0.08;
     g.player.body.collisionResponse = false;
     this.honkCd = 0.3;
     sfx.engine(1, 90);
@@ -134,7 +214,7 @@ export class GolfCart {
     let throttle = 0, steer = 0;
     if (this.driving) {
       if (this.justEntered) this.justEntered = false;
-      else if (input.justPressed('KeyE')) { this.exit(); return; }
+      else if (input.justPressed('KeyE') || input.mousePressed(0)) { this.exit(); return; }
       if (input.down('KeyW')) throttle += 1;
       if (input.down('KeyS')) throttle -= 1;
       if (input.down('KeyA')) steer += 1;
@@ -152,6 +232,8 @@ export class GolfCart {
     const dyaw = steer * 0.55 * (this.speed / WHEELBASE) * dt;
     this.yaw += dyaw;
     if (this.driving) g.player.yaw += dyaw; // the camera turns with the cart
+    // a passenger who gets picked up (or stands up) leaves the seat
+    if (this.passenger && (this.game.grabber.entity === this.passenger || this.passenger.state !== 'ragdoll')) this.unseat();
     this.wheel.rotation.z += (steer * 1.2 - this.wheel.rotation.z) * damp(10, dt);
     for (const w of this.wheels) w.rotation.x += (this.speed * dt) / 0.24;
     if (this.driving && Math.abs(this.speed) > 0.5 && (this.hum = (this.hum || 0) - dt) <= 0) {
@@ -166,6 +248,26 @@ export class GolfCart {
     v.z = Math.cos(this.yaw) * this.speed;
     b.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.yaw);
     if (b.position.y < heightAt(b.position.x, b.position.z) - 1) b.position.y = heightAt(b.position.x, b.position.z) + 0.5; // never sink under the hill
+    // cargo in the back rides along (until someone picks it up)
+    if (this.cargo.size) {
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+      for (const [it, local] of this.cargo) {
+        if (!this.game.items.list.includes(it) || this.game.grabber.entity === it) { this.cargo.delete(it); continue; }
+        const w = local.clone().applyQuaternion(q);
+        it.body.position.set(b.position.x + w.x, b.position.y + w.y, b.position.z + w.z);
+        it.body.velocity.set(v.x, 0, v.z);
+        it.body.angularVelocity.set(0, 0, 0);
+        it.body.quaternion.set(q.x, q.y, q.z, q.w);
+        it.body.force.y -= it.body.mass * this.game.world.gravity.y;
+        it.body.wakeUp();
+      }
+    }
+    // things dropped into the back get strapped in
+    for (const it of this.game.items.list) {
+      if (this.cargo.has(it) || this.game.grabber.entity === it) continue;
+      const d = new THREE.Vector3(it.body.position.x - b.position.x, it.body.position.y - b.position.y, it.body.position.z - b.position.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.yaw);
+      if (Math.abs(d.x) < BED.x && d.z > BED.z0 && d.z < BED.z1 && d.y > BED.y0 && d.y < BED.y1 && it.body.velocity.length() < 3) { d.y = Math.max(d.y, BED.y0 + 0.3); this.cargo.set(it, d); }
+    }
     if (this.driving) {
       // carry the driver
       const p = this.game.player.body;

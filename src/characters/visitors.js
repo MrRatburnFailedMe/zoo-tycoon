@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { createCharacter } from './character.js';
 import { heightAt } from '../world/terrain.js';
-import { GATE, PLAZA, TURNSTILES, ENCLOSURES, PENGUIN, ELEPHANT, GORILLA } from '../world/layout.js';
+import { GATE, PLAZA, TURNSTILES, ENCLOSURES, PENGUIN, ELEPHANT, GORILLA, DEN, HIPPO } from '../world/layout.js';
 import { angleDiff } from '../util/math.js';
 import { canvasTexture } from '../util/textures.js';
 import { sfx } from '../audio.js';
@@ -60,6 +60,7 @@ function routeTo(e) {
   if (e === PENGUIN) return [[0, 41], e.view];
   if (e === ELEPHANT) return [[0, 28], e.view];
   if (e === GORILLA) return [[0, 29], [-26, 29], e.view];
+  if (e === DEN) return [[0, 20], [6, 13], HIPPO.view, [14, -20], e.view];
   // the rest hang off the plaza: walk round the fountain to the side facing the exhibit
   const r = 5.8, want = Math.atan2(e.view[1] - PLAZA.z, e.view[0] - PLAZA.x);
   const pts = [[0, 20]];

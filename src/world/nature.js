@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { prep, merge, staticBody, paint } from '../util/build.js';
 import { mulberry32, hash2, smoothstep } from '../util/math.js';
 import { heightAt } from './terrain.js';
-import { isOpenGround, pathDist, PLAZA, OFFICE, HIPPO, POND, LION, inMonkeyHouse, PENGUIN, ELEPHANT, GORILLA, TICKET_BOOTH } from './layout.js';
+import { isOpenGround, pathDist, PLAZA, OFFICE, HIPPO, POND, LION, inMonkeyHouse, PENGUIN, ELEPHANT, GORILLA, TICKET_BOOTH, DEN, BATHROOM } from './layout.js';
 
 // ---- Tree models (merged, vertex-colored). Replace these with your own meshes later. ----
 const TRUNK = 0x5e4330;
@@ -205,6 +205,8 @@ function buildGrass(game, rand) {
     if (Math.hypot(x - POND.x, z - POND.z) < HIPPO.r - 0.5) continue; // the pit gets reeds instead
     if (inMonkeyHouse(x, z, 0.6) && (!inMonkeyHouse(x, z, -0.6) || rand() < 0.75)) continue; // clean glass line, sparse floor inside
     if (Math.hypot(x - PENGUIN.x, z - PENGUIN.z) < PENGUIN.r + 0.6) continue; // ice, not lawn
+    if (Math.abs(Math.hypot(x - DEN.x, z - DEN.z) - DEN.r) < 0.8) continue; // clear the den's walls
+    if (Math.abs(x - BATHROOM.x) < BATHROOM.w / 2 + 0.3 && Math.abs(z - BATHROOM.z) < BATHROOM.d / 2 + 0.3) continue;
     if (Math.abs(Math.hypot(x - GORILLA.x, z - GORILLA.z) - GORILLA.r) < 0.6) continue; // clean glass line
     if (Math.hypot(x - ELEPHANT.x, z - ELEPHANT.z) < ELEPHANT.r - 0.5 && rand() < 0.7) continue; // mostly sand
     if (Math.abs(x - TICKET_BOOTH.x) < 2 && Math.abs(z - TICKET_BOOTH.z) < 1.8) continue; // not through the booth floor

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mat, mesh } from '../util/build.js';
 import { clamp, damp } from '../util/math.js';
+import { loadGLB } from '../util/glb.js';
 
 const FWD = new THREE.Vector3(0, 0, -1);
 const HAND_LEN = 0.12;
@@ -23,6 +24,40 @@ export class Hands {
     this.throwT = 0;
     this.sway = new THREE.Vector2();
     this.tmp = new THREE.Vector3();
+    this.loadModel(look);
+  }
+
+  // Swap the box hands for the low-poly hand model (Anastasiia Ku, Poly Pizza), tinted to the skin.
+  async loadModel(look) {
+    let gl;
+    try { gl = await loadGLB('assets/hands.glb'); } catch { return; }
+    const meshes = [];
+    gl.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
+    if (meshes.length < 2) return;
+    gl.scene.updateMatrixWorld(true);
+    const centerX = (m) => { m.geometry.computeBoundingBox(); return m.geometry.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(m.matrixWorld).x; };
+    meshes.sort((a, b) => centerX(a) - centerX(b)); // [left hand, right hand]
+    const skin = new THREE.MeshStandardMaterial({ color: look.skin, roughness: 0.7, flatShading: true });
+    for (const a of this.arms) {
+      const src = meshes[a.side === 1 ? 1 : 0];
+      const geo = src.geometry.clone().applyMatrix4(src.matrixWorld);
+      geo.computeBoundingBox();
+      const b = geo.boundingBox, c = b.getCenter(new THREE.Vector3());
+      geo.translate(-c.x, -b.min.y, -c.z); // wrist at the origin, fingers up +Y, palm toward +Z
+      const k = 0.2 / (b.max.y - b.min.y);
+      geo.scale(k, k, k);
+      geo.rotateX(-Math.PI / 2); // fingers forward (-Z), palm up
+      geo.rotateZ(Math.PI); // palm down
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, skin);
+      m.renderOrder = 2;
+      // hide the box palm/fingers but keep the groups the animation drives
+      a.hand.children.forEach((ch) => { if (ch !== a.cuff) ch.visible = false; });
+      a.fingers.visible = true;
+      a.fingers.children.forEach((f) => (f.visible = false));
+      a.model = m;
+      a.hand.add(m);
+    }
   }
 
   makeArm(look, side) {
@@ -55,7 +90,7 @@ export class Hands {
     const rest = new THREE.Vector3(0.3 * side, -0.4, 0.05);
     pivot.position.copy(rest);
     const restTarget = new THREE.Vector3(0.2 * side, -0.24, -0.5);
-    return { pivot, sleeve, hand, fingers, side, rest, restTarget, cur: restTarget.clone(), vel: new THREE.Vector3(), curl: 0.3 };
+    return { pivot, sleeve, hand, fingers, cuff, side, rest, restTarget, cur: restTarget.clone(), vel: new THREE.Vector3(), curl: 0.3 };
   }
 
   punch() { this.punchT = 0.22; }
@@ -114,6 +149,7 @@ export class Hands {
       const curl = holding ? 1.3 : this.punchT > 0 ? 1.5 : 0.25;
       a.curl += (curl - a.curl) * damp(14, dt);
       a.fingers.rotation.x = -a.curl;
+      if (a.model) a.model.rotation.x = -a.curl * 0.35; // grip: hand tips down a little
     }
   }
 }

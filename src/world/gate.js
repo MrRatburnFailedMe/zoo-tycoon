@@ -6,6 +6,7 @@ import { GATE, GATE_W, TICKET_BOOTH, TURNSTILES } from './layout.js';
 import { G } from '../physics.js';
 import { sfx } from '../audio.js';
 import { Register } from './register.js';
+import { modelCopy, placeProp } from './props.js';
 
 // The front gate: three tight turnstile lanes (you have to push through the arms), low walls either
 // side so there's no way round, and a compact ticket booth. In the booth: a rolling stool on a rail
@@ -132,8 +133,8 @@ export function buildGate(game) {
   solidBox(game, { size: [W - 0.2, 0.9, 0.06], pos: [BX, fy + 0.5, front - 0.66], color: 0x6b4426, collide: false }); // counter front panel
   solidBox(game, { size: [W - 0.4, 0.05, 0.3], pos: [BX, cy, front + 0.18], color: WOOD });
   // a little shelf of supplies on the back wall
-  solidBox(game, { size: [0.9, 0.04, 0.3], pos: [BX + 1.0, fy + 1.6, BZ - D / 2 + 0.22], color: WOOD, collide: false });
-  for (let i = 0; i < 4; i++) solidBox(game, { size: [0.16, 0.22, 0.2], pos: [BX + 0.7 + i * 0.2, fy + 1.73, BZ - D / 2 + 0.22], color: [0xe2523c, 0xffd34d, 0x3f78c2, 0x2fb38a][i], collide: false });
+  solidBox(game, { size: [0.9, 0.04, 0.3], pos: [BX + 1.0, fy + 1.6, BZ - D / 2 + 0.22], color: WOOD });
+  for (let i = 0; i < 2; i++) solidBox(game, { size: [0.16, 0.22, 0.2], pos: [BX + 0.7 + i * 0.2, fy + 1.73, BZ - D / 2 + 0.22], color: [0xe2523c, 0xffd34d, 0x3f78c2, 0x2fb38a][i], collide: false });
 
   // ---- desk computer: prices, analytics and shopping only ----
   const mon = new THREE.Group();
@@ -272,6 +273,16 @@ export function buildGate(game) {
     stool.add(leg, wheel);
   }
   scene.add(stool);
+  // the real chair model (Quaternius) replaces the box stool once it loads
+  modelCopy('assets/officechair.glb', { height: 1.05, recolor: (m) => (m.color && m.color.b > m.color.r * 1.4 ? new THREE.Color(0xe2523c) : null) }).then((m) => {
+    if (!m) return;
+    stool.children.forEach((c) => (c.visible = false));
+    m.scale.multiplyScalar(1.12); // a tall counter chair
+    stool.add(m);
+  });
+  // a power box on the booth's back wall and a radio on the shelf
+  placeProp(game, 'assets/powerbox.glb', { x: BX - W / 2 + 0.35, y: fy, z: BZ - D / 2 + 0.25, height: 1.2, collide: false });
+  game.items.spawn('radio', BX + 1.22, fy + 1.78, BZ - D / 2 + 0.24, { yaw: 0 });
   const RAIL = { x0: BX - 1.15, x1: BX + 1.15, z: front - 1.0 };
   solidBox(game, { size: [RAIL.x1 - RAIL.x0 + 0.3, 0.02, 0.06], pos: [BX, fy + 0.02, RAIL.z], color: 0x999999, collide: false });
   const chair = {

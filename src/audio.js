@@ -87,6 +87,7 @@ export const sfx = {
     tone({ f: 1100 * p, f2: 380 * p, type: 'sawtooth', dur: 0.5, vol: 0.08 * v, delay: 0.78 });
   },
   boing: () => tone({ f: 160, f2: 620, type: 'sine', dur: 0.35, vol: 0.14 }),
+  flush: () => { noise({ dur: 1.4, vol: 0.18, f: 900, f2: 300, type: 'lowpass' }); noise({ dur: 0.8, vol: 0.08, f: 2500, f2: 800, type: 'bandpass', q: 1, delay: 0.3 }); },
   print: () => { for (let i = 0; i < 6; i++) tone({ f: 900 + (i % 2) * 300, type: 'square', dur: 0.03, vol: 0.03, delay: i * 0.05 }); noise({ dur: 0.3, vol: 0.05, f: 3000, type: 'bandpass', q: 2 }); },
   swipe: () => noise({ dur: 0.25, vol: 0.12, f: 1200, f2: 4000, type: 'bandpass', q: 1.5 }),
   beep: () => { tone({ f: 1500, type: 'square', dur: 0.08, vol: 0.05 }); tone({ f: 2000, type: 'square', dur: 0.12, vol: 0.05, delay: 0.1 }); },
@@ -120,3 +121,23 @@ export const sfx = {
     }
   },
 };
+
+// A little looping zoo tune for the radios. toggle() returns whether it's now playing.
+export const music = (() => {
+  let timer = null, step = 0;
+  const MEL = [0, 4, 7, 12, 7, 4, 5, 9, 12, 9, 5, 2, 7, 11, 14, 11];
+  const BASS = [0, 0, 5, 5, 7, 7, 0, 0];
+  const hz = (n) => 392 * Math.pow(2, n / 12);
+  const tick = () => {
+    tone({ f: hz(MEL[step % MEL.length]), type: 'triangle', dur: 0.18, vol: 0.05 });
+    if (step % 2 === 0) tone({ f: hz(BASS[(step / 2) % BASS.length] - 24), type: 'sine', dur: 0.3, vol: 0.06 });
+    step++;
+  };
+  return {
+    get on() { return !!timer; },
+    toggle() {
+      if (timer) { clearInterval(timer); timer = null; return false; }
+      step = 0; tick(); timer = setInterval(tick, 220); return true;
+    },
+  };
+})();

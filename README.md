@@ -16,6 +16,7 @@ Then open http://localhost:5173.
 
 - WASD to move, mouse to look, Space to jump, Shift to sprint
 - Click to pick something up, click again to put it down
+- Click to use things (doors, printer, register, golf cart, toilets); E works too
 - Hold Q to wind up a throw, let go to throw (longer hold = harder throw)
 - E to interact (computers, the ATM, the golf cart, handing tickets to visitors)
 - F to use what you're holding

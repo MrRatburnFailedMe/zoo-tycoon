@@ -25,7 +25,11 @@ export const HIPPO_ISLAND = { x: POND.x + 0.6, z: POND.z + 0.4, r: 2.3 };
 export const MONKEY = { id: 'monkey', name: 'MONKEY HOUSE', x: -1, z: -31, w: 24, d: 16, h: 7, r: 15 };
 
 // Lion enclosure: raised savanna with a rock outcrop, tall fence, viewing window toward the plaza.
-export const LION = { id: 'lion', name: "LION'S DEN", x: -30, z: -8, r: 13 };
+export const LION = { id: 'lion', name: 'COUGAR CANYON', x: -30, z: -8, r: 13 };
+// The lion den: a rocky pentagon with a cave, a big rock to lounge on, glass toward the path.
+export const DEN = { id: 'den', name: "LION'S DEN", x: 26, z: -31, r: 9 };
+// Park bathroom: a little block east of the entrance road, door on the west side.
+export const BATHROOM = { x: 12, z: 40, w: 6.4, d: 4.6 };
 
 // Penguin cove: icy pool behind low glass, west of the entrance road.
 export const PENGUIN = { id: 'penguin', name: 'PENGUIN COVE', x: -13, z: 40, r: 7 };
@@ -34,7 +38,7 @@ export const ELEPHANT = { id: 'elephant', name: 'ELEPHANT PLAINS', x: 28, z: 25,
 // Gorilla forest: rocky glade behind a tall glass wall, west of the office, south of the lions.
 export const GORILLA = { id: 'gorilla', name: 'GORILLA FOREST', x: -37, z: 17, r: 7 };
 
-export const ENCLOSURES = [HIPPO, MONKEY, LION, PENGUIN, ELEPHANT, GORILLA];
+export const ENCLOSURES = [HIPPO, MONKEY, LION, PENGUIN, ELEPHANT, GORILLA, DEN];
 
 // Where each exhibit is viewed from / where keepers get in.
 HIPPO.view = [HIPPO.x + Math.cos(HIPPO.deckAngle) * (HIPPO.r + 1.2), HIPPO.z + Math.sin(HIPPO.deckAngle) * (HIPPO.r + 1.2)];
@@ -60,6 +64,10 @@ MONKEY.keeper = [MONKEY.door[0] + 1.6, MONKEY.door[1]];
 const loopNE = [14, -20];
 const loopNW = [-20, -24];
 const loopE = [40, -14];
+DEN.viewAngle = Math.atan2(loopNE[1] - DEN.z, loopNE[0] - DEN.x);
+DEN.view = [DEN.x + Math.cos(DEN.viewAngle) * (DEN.r + 2), DEN.z + Math.sin(DEN.viewAngle) * (DEN.r + 2)];
+DEN.keeperAngle = DEN.viewAngle + Math.PI * 0.7;
+DEN.keeper = [DEN.x + Math.cos(DEN.keeperAngle) * (DEN.r + 1.5), DEN.z + Math.sin(DEN.keeperAngle) * (DEN.r + 1.5)];
 
 export const PATHS = [
   { a: [0, 84], b: [PLAZA.x, PLAZA.z], w: 4.2 }, // the road up the hill through the gate
@@ -84,19 +92,23 @@ export const PATHS = [
   { a: [0, 29], b: [-26, 29], w: 2.6 }, // south of the office and dumpster
   { a: [-26, 29], b: GORILLA.view, w: 2.6 },
   { a: [GATE.x + 7, GATE.z + 2], b: [GATE.x + 2, GATE.z + 12], w: 2.4 }, // queue to the ticket window
+  { a: loopNE, b: DEN.view, w: 3 }, // up to the lion den
+  { a: [0, 40], b: [BATHROOM.x - BATHROOM.w / 2 - 1, BATHROOM.z], w: 2.2 }, // to the toilets
 ]; 
 
 // Areas the terrain is levelled under (buildings, plaza, exhibits).
 export const FLATTEN = [
   { x: OFFICE.x, z: OFFICE.z, r: 8.5, blend: 5 },
   { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, blend: 6 },
-  { x: GATE.x + 2, z: GATE.z + 3, r: 10, blend: 20 }, // one level forecourt: turnstiles, ticket booth and the queue
+  { x: GATE.x + 2, z: GATE.z + 3, r: 10, blend: 8 }, // one level forecourt: turnstiles, ticket booth and the queue
   { x: HIPPO.x, z: HIPPO.z, r: HIPPO.r + 1.5, blend: 4 },
   { x: MONKEY.x, z: MONKEY.z, r: 14.5, blend: 5 },
   { x: TRUCK_BAY.x, z: TRUCK_BAY.z + 4, r: 6, blend: 16 }, // truck bay
   { x: PENGUIN.x, z: PENGUIN.z, r: PENGUIN.r + 1.5, blend: 4 },
   { x: ELEPHANT.x, z: ELEPHANT.z, r: ELEPHANT.r + 1.5, blend: 5 },
   { x: GORILLA.x, z: GORILLA.z, r: GORILLA.r + 1.5, blend: 4 },
+  { x: DEN.x, z: DEN.z, r: DEN.r + 1.5, blend: 5 },
+  { x: BATHROOM.x, z: BATHROOM.z, r: 4.6, blend: 4 },
   // level ground along the lion viewing window
   { x: LION.x + Math.cos(LION.viewAngle) * LION.r, z: LION.z + Math.sin(LION.viewAngle) * LION.r, r: 5.5, blend: 4 },
 ];
@@ -129,7 +141,8 @@ export function isOpenGround(x, z, margin = 1.5) {
   if (Math.hypot(x - HIPPO.x, z - HIPPO.z) < HIPPO.r + 1 + margin) return false;
   if (Math.hypot(x - LION.x, z - LION.z) < LION.r + margin) return false;
   if (inMonkeyHouse(x, z, margin + 1.5)) return false;
-  for (const e of [PENGUIN, ELEPHANT, GORILLA]) if (Math.hypot(x - e.x, z - e.z) < e.r + 1 + margin) return false;
+  for (const e of [PENGUIN, ELEPHANT, GORILLA, DEN]) if (Math.hypot(x - e.x, z - e.z) < e.r + 1 + margin) return false;
+  if (Math.abs(x - BATHROOM.x) < BATHROOM.w / 2 + margin + 1 && Math.abs(z - BATHROOM.z) < BATHROOM.d / 2 + margin + 1) return false;
   const r = Math.hypot(x, z);
   if (Math.abs(r - PERIMETER_R) < margin + 0.5) return false;
   return true;

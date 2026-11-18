@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { StaticBatch, staticBody, mat, mesh } from '../util/build.js';
 import { angleDiff } from '../util/math.js';
 import { heightAt } from './terrain.js';
-import { PENGUIN, ELEPHANT, GORILLA } from './layout.js';
+import { PENGUIN, ELEPHANT, GORILLA, DEN } from './layout.js';
 
 // The three newer exhibits: Penguin Cove (icy pool behind low glass), Elephant Plains (sandy yard,
 // log fence, watering hole) and Gorilla Forest (tall glass viewing wall, rocks, climbing frame).
@@ -135,6 +135,60 @@ export function buildHabitats(game) {
     for (let i = 0; i < 20; i++) {
       const a = i * 2.4, d = 1.5 + (i * 0.37) % (r * 0.7 - 2);
       batch.add(new THREE.ConeGeometry(0.35, 0.7, 5), i % 2 ? 0x3f7a2e : 0x5c8a35, { pos: [cx + Math.cos(a) * d, heightAt(cx, cz) + 0.3, cz + Math.sin(a) * d] });
+    }
+  }
+
+  // ---------- Lion's Den ----------
+  {
+    const { x: cx, z: cz, r } = DEN;
+    const SIDES = 5, ROT = DEN.viewAngle; // a pentagon with one corner pointing at the path
+    disc(game, cx, cz, r - 0.1, 0xc9a86a, 0.03, {}, SIDES, ROT + Math.PI / SIDES);
+    const H = 3.0;
+    ring(cx, cz, r, 2.2, (a) => Math.abs(angleDiff(a, DEN.keeperAngle)) < 0.13, (s) => {
+      const facing = Math.abs(angleDiff(s.mid, DEN.viewAngle)) < 0.8;
+      // stone footing all round
+      batch.add(new THREE.BoxGeometry(0.6, 0.7, s.L + 0.1), 0x9a8f7e, { pos: [s.mx, s.y + 0.3, s.mz], rot: [0, s.yaw, 0] });
+      staticBody(game, new CANNON.Box(new CANNON.Vec3(0.3, 0.35, s.L / 2)), s.mx, s.y + 0.3, s.mz, s.yaw);
+      if (facing) {
+        // glass on the visitor side, dark steel frame
+        batch.add(new THREE.BoxGeometry(0.18, H + 0.7, 0.18), 0x2f3336, { pos: [s.x0, s.y + (H + 0.7) / 2, s.z0] });
+        batch.add(new THREE.BoxGeometry(0.16, 0.16, s.L + 0.1), 0x2f3336, { pos: [s.mx, s.y + H + 0.62, s.mz], rot: [0, s.yaw, 0] });
+        game.glass.add(s.mx, s.y + 0.66 + H / 2, s.mz, s.L - 0.1, H, s.yaw, { colliderThick: 0.2 });
+      } else {
+        // tall rough rock wall
+        const n = Math.max(1, Math.round(s.L / 1.1));
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n, x = s.x0 + (s.x1 - s.x0) * t, z = s.z0 + (s.z1 - s.z0) * t, h = 3.4 + Math.sin(i * 1.7 + s.a0 * 5) * 0.4;
+          batch.add(new THREE.IcosahedronGeometry(0.85, 0), i % 2 ? 0x8f8578 : 0x9d9284, { pos: [x, heightAt(x, z) + h * 0.45, z], scale: [0.9, h / 1.6, 0.8], rot: [0, i * 1.3, 0.1] });
+        }
+        staticBody(game, new CANNON.Box(new CANNON.Vec3(0.45, 1.9, s.L / 2)), s.mx, s.y + 1.9, s.mz, s.yaw);
+      }
+    }, SIDES, ROT + Math.PI / SIDES);
+    // the cave: a ring of big rocks with a dark mouth, at the back of the den
+    const back = DEN.viewAngle + Math.PI;
+    const kx = cx + Math.cos(back) * r * 0.42, kz = cz + Math.sin(back) * r * 0.42, ky = heightAt(kx, kz);
+    const caveYaw = Math.atan2(cx - kx, cz - kz);
+    for (let i = 0; i < 7; i++) {
+      const a = caveYaw + Math.PI * 0.35 + (i / 6) * Math.PI * 1.3;
+      const rx = kx + Math.sin(a) * 1.9, rz = kz + Math.cos(a) * 1.9;
+      batch.add(new THREE.IcosahedronGeometry(1.15, 0), i % 2 ? 0x8a8174 : 0x958b7d, { pos: [rx, ky + 0.8, rz], scale: [1, 1.2, 1], rot: [0, i, 0] });
+      staticBody(game, new CANNON.Sphere(1.0), rx, ky + 0.8, rz);
+    }
+    batch.add(new THREE.IcosahedronGeometry(2.3, 0), 0x8f8578, { pos: [kx - Math.sin(caveYaw) * 0.6, ky + 2.0, kz - Math.cos(caveYaw) * 0.6], scale: [1.2, 0.55, 1.1] }); // roof slab
+    staticBody(game, new CANNON.Box(new CANNON.Vec3(2.2, 0.5, 2.2)), kx - Math.sin(caveYaw) * 0.6, ky + 2.1, kz - Math.cos(caveYaw) * 0.6, caveYaw);
+    batch.add(new THREE.CircleGeometry(1.6, 10), 0x2a241d, { pos: [kx, ky + 0.05, kz], rot: [-Math.PI / 2, 0, 0] }); // shadowy floor
+    // pride rock: a big flat-topped rock to lounge on
+    const px = cx + Math.cos(DEN.viewAngle + 1.4) * r * 0.35, pz = cz + Math.sin(DEN.viewAngle + 1.4) * r * 0.35, py = heightAt(px, pz);
+    batch.add(new THREE.CylinderGeometry(1.9, 2.4, 1.2, 7), 0xa39886, { pos: [px, py + 0.6, pz] });
+    batch.add(new THREE.CylinderGeometry(1.7, 1.9, 0.12, 7), 0xb3a893, { pos: [px, py + 1.22, pz] });
+    staticBody(game, new CANNON.Cylinder(2.1, 2.3, 1.25, 7), px, py + 0.62, pz);
+    // a shade tree and a fallen log to scratch
+    tree(game, batch, cx + Math.cos(DEN.viewAngle - 1.5) * r * 0.45, cz + Math.sin(DEN.viewAngle - 1.5) * r * 0.45, 4.6, 0x6b8f3a);
+    const lx = cx + Math.cos(DEN.viewAngle - 0.4) * r * 0.25, lz = cz + Math.sin(DEN.viewAngle - 0.4) * r * 0.25;
+    batch.add(new THREE.CylinderGeometry(0.3, 0.34, 2.8, 7), 0x6b5038, { pos: [lx, heightAt(lx, lz) + 0.3, lz], rot: [0, 0.7, Math.PI / 2] });
+    for (let i = 0; i < 26; i++) {
+      const a = i * 2.39, d = 1.2 + (i * 0.53) % (r * 0.75);
+      batch.add(new THREE.ConeGeometry(0.22, 0.6, 4), i % 2 ? 0xc2a35a : 0xb39448, { pos: [cx + Math.cos(a) * d, heightAt(cx, cz) + 0.25, cz + Math.sin(a) * d] }); // dry grass tufts
     }
   }
 

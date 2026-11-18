@@ -131,7 +131,7 @@ export class Friend {
       // fell through the ground or off the world: get straight back up
       const lost = torso.position.y < heightAt(torso.position.x, torso.position.z) - 2 || Math.hypot(torso.position.x, torso.position.z) > 135;
       const downFor = this.health.hp <= 0 ? 8 : 5; // knocked out stays down longer
-      if (lost || torso.position.y < -30 || (this.downTime > downFor && !held && torso.velocity.length() < 1.2)) this.standUp();
+      if (lost || torso.position.y < -30 || (this.downTime > downFor && !held && !this.seatedIn && torso.velocity.length() < 1.2)) this.standUp();
       return;
     }
 

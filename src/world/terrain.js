@@ -30,7 +30,12 @@ export function baseHeight(x, z) {
 
 let zones = null;
 function flattenZones() {
-  if (!zones) zones = FLATTEN.map((f) => ({ ...f, h: baseHeight(f.x, f.z) }));
+  if (!zones) {
+    zones = FLATTEN.map((f) => ({ ...f, h: baseHeight(f.x, f.z) }));
+    // raise the gate forecourt part-way toward the plaza so the entrance road isn't a cliff
+    zones[2].h = lerp(zones[2].h, zones[1].h, 0.4);
+    zones[5].h = zones[2].h - 0.3; // truck bay sits level with the forecourt
+  }
   return zones;
 }
 const hippoRim = () => flattenZones()[3].h;
@@ -57,8 +62,21 @@ function hippoDig(x, z) {
   return dig;
 }
 
+// The entrance road from the gate up to the plaza is graded into one long, even ramp (the raw
+// hillside there was a ~35 degree drop), fading back into the natural slope either side.
+function roadGrade(x, z, h) {
+  const z0 = PLAZA.z + PLAZA.r + 1, z1 = 45; // plaza edge -> gate forecourt
+  if (z < z0 - 6 || z > z1 + 6) return h;
+  const zs = flattenZones();
+  const hp = zs[1].h, hg = zs[2].h;
+  const t = Math.min(1, Math.max(0, (z - z0) / (z1 - z0)));
+  const target = lerp(hp, hg, t);
+  const w = (1 - smoothstep(7, 16, Math.abs(x))) * (1 - smoothstep(z1, z1 + 6, z)) * (1 - smoothstep(z0, z0 - 6, z));
+  return lerp(h, target, w);
+}
+
 export function heightAt(x, z) {
-  let h = baseHeight(x, z);
+  let h = roadGrade(x, z, baseHeight(x, z));
   for (const f of flattenZones()) {
     const d = Math.hypot(x - f.x, z - f.z);
     if (d < f.r + f.blend) h = lerp(h, f.h, 1 - smoothstep(f.r, f.r + f.blend, d));

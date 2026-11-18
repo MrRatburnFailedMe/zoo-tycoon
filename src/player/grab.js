@@ -41,7 +41,13 @@ export class Grabber {
 
     if (this.held) {
       if (!this.held.world) return this.release();
-      if (input.mousePressed(0)) return this.release();
+      if (input.mousePressed(0)) {
+        // clicking something you can use while holding stuff hands it over (ticket to a visitor, cash
+        // into the register, card through the reader, a friend into the cart); otherwise put it down
+        const hit = this.game.interact.hit;
+        if (hit?.entity.interact && hit.entity !== this.entity) { this.game.hands.punch(); hit.entity.interact(); return; }
+        return this.release();
+      }
       if (input.down('KeyQ')) {
         if (!this.charging) { this.charging = true; this.charge = 0; }
         this.charge = Math.min(1, this.charge + (1 / 60) / 1.1);
@@ -67,6 +73,7 @@ export class Grabber {
     } else if (input.mousePressed(0)) {
       const hit = this.game.interact.hit;
       if (hit && hit.entity.getGrabBody) this.grab(hit);
+      else if (hit && hit.entity.interact) { this.game.hands.punch(); hit.entity.interact(); } // left click is the use button
       else this.game.hands.punch();
     }
   }

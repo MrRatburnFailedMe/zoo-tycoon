@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { loadGLB } from '../util/glb.js';
 import { heightAt, pondWaterY } from './terrain.js';
-import { LION, HIPPO, POND, MONKEY, PENGUIN, ELEPHANT, GORILLA, HIPPO_ISLAND } from './layout.js';
+import { LION, HIPPO, POND, MONKEY, PENGUIN, ELEPHANT, GORILLA, HIPPO_ISLAND, DEN } from './layout.js';
 import { penguinGeo, elephantGeo, gorillaGeo } from './beasts.js';
 import { angleDiff, clamp, damp } from '../util/math.js';
 import { sfx } from '../audio.js';
@@ -13,10 +13,18 @@ import { sfx } from '../audio.js';
 //
 // Per-species numbers are fractions of the model's length (L) or height (H) unless noted.
 const SPECIES = {
+  // mountain lions (Google Data Arts Team): the model carries a 12-frame running cycle as morph
+  // targets, so the legs genuinely bend; the shader only folds them for lying down
   lion: {
-    url: 'assets/lion.glb', yaw: -Math.PI / 2, length: 2.2, color: 0xcf9550,
+    url: 'assets/mountainlion.glb', yaw: 0, length: 2.1, color: null, morph: true,
     legTop: 0.43, headZ: 0.33, neckY: 0.78, tailZ: -0.33, stride: 0.12, lift: 0.1, tail: 0.1,
     walk: 1.3, run: 6.8, turn: 2.6, sleepChance: 0.22, sideSleep: true,
+  },
+  // the big maned lion in the new den (Poly by Google); behaves like the cats but heavier
+  biglion: {
+    kind: 'lion', url: 'assets/biglion.glb', yaw: 0, length: 2.7, color: null,
+    legTop: 0.42, headZ: 0.3, neckY: 0.78, tailZ: -0.36, stride: 0.12, lift: 0.1, tail: 0.1,
+    walk: 1.2, run: 6.4, turn: 2.2, sleepChance: 0.3, sideSleep: true,
   },
   hippo: {
     url: 'assets/hippo.glb', yaw: -Math.PI / 2, length: 3.4, color: 0xb08a86,
@@ -129,10 +137,22 @@ const ACTS = {
     // lying down licking a front paw
     { name: 'groom', dur: [4, 7], pose: (t, k, e) => ({ fold: e, headPitch: (0.75 + Math.sin(t * 7) * 0.12) * e, headYaw: 0.35 * e }) },
     { name: 'yawn', dur: [2, 2.6], pose: (t, k, e) => ({ rear: -0.35 * e, headPitch: -0.8 * Math.sin(k * Math.PI) }) },
+    // stalk low, wiggle the hips, then launch forward in an arc and land
+    { name: 'pounce', dur: [2.2, 2.2], say: true, moveAt: (k) => (k > 0.55 && k < 0.8 ? 9 : 0), pose: (t, k) => {
+      const crouch = smooth(k / 0.25) * (1 - smooth((k - 0.5) / 0.08));
+      const air = k > 0.55 && k < 0.8 ? Math.sin(((k - 0.55) / 0.25) * Math.PI) : 0;
+      const land = k > 0.78 ? Math.sin(Math.min(1, (k - 0.78) / 0.22) * Math.PI) : 0;
+      return { fold: crouch * 0.55 + land * 0.3, lift: air * 0.9, rear: -0.35 * air + 0.25 * land, roll: Math.sin(t * 18) * 0.04 * crouch, headPitch: 0.25 * crouch - 0.3 * air };
+    } },
+    // stretch: front legs out, rump up
+    { name: 'stretch', dur: [2.2, 3], pose: (t, k, e) => ({ rear: 0.3 * e, headPitch: -0.35 * e }) },
+    // flop over and roll on the back
+    { name: 'flop', dur: [3.5, 5], pose: (t, k, e) => ({ fold: e, roll: (1.5 + Math.sin(t * 2.2) * 0.35) * e, headYaw: Math.sin(t * 1.4) * 0.5 * e }) },
   ],
 };
 // What each small animal does when you pick it up: words it yells, how often, and in what colour.
 const PANIC = {
+  lion: { words: ['MEW!', 'RAWR!', 'GRRR!', 'I AM FEROCIOUS!', 'HISSS!'], color: '#ffcc66', every: 0.8 },
   baboon: { words: ['EEK!', 'OOK OOK!!', 'LET GO!', 'EEEEE!'], color: '#ffd23a', every: 0.75 },
   hippo: { words: ['AAAAAAAH!', 'WAAAAAH!', 'MOMMY!!', 'PUT ME DOWN!', 'AAAAA!'], color: '#ff7aa8', every: 1.15 },
   penguin: { words: ['SQUAWK!', 'HONK HONK!', 'NOT THE FACE!', 'FLAP FLAP!', 'I CAN\'T FLY!!'], color: '#9fe0ff', every: 0.7 },
@@ -140,8 +160,8 @@ const PANIC = {
   gorilla: { words: ['OOH OOH!', 'GRRR!', 'HANDS OFF!', 'OOK!'], color: '#ffb36b', every: 0.8 },
 };
 const SLAPPERS = ['baboon', 'gorilla']; // these fight back when picked up
-const HEAVY = { hippo: 45, elephant: 60, gorilla: 14, penguin: 6, baboon: 9 };
-const FAMILY_ACT = { hippo: 'stand', elephant: 'trumpet', gorilla: 'beat' }; // what the grown-ups do when you grab a baby
+const HEAVY = { lion: 12, hippo: 45, elephant: 60, gorilla: 14, penguin: 6, baboon: 9 };
+const FAMILY_ACT = { lion: 'roar', hippo: 'stand', elephant: 'trumpet', gorilla: 'beat' }; // what the grown-ups do when you grab a baby
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _up = new THREE.Vector3();
 const UPY = new CANNON.Vec3(0, 1, 0);
 
@@ -164,24 +184,48 @@ function patch(material, u) {
 async function loadSpecies(name) {
   const sp = SPECIES[name];
   let geo, map = null;
+  // apply a transform to the geometry and its (relative) morph targets
+  const xf = (g, m) => {
+    g.applyMatrix4(m);
+    const lin = new THREE.Matrix4().extractRotation(m), sc = new THREE.Vector3().setFromMatrixScale(m);
+    lin.scale(sc);
+    for (const attr of g.morphAttributes.position || []) attr.applyMatrix4(lin);
+    return g;
+  };
   if (sp.build) geo = sp.build();
   else {
     const gltf = await loadGLB(sp.url);
     gltf.scene.updateMatrixWorld(true);
     let src = null;
     gltf.scene.traverse((o) => { if (o.isMesh && !src) src = o; });
-    geo = src.geometry.clone().applyMatrix4(src.matrixWorld);
+    geo = xf(src.geometry.clone(), src.matrixWorld);
+    if (!sp.morph) { geo.morphAttributes = {}; }
+    else {
+      delete geo.morphAttributes.normal; // flat-shaded anyway
+      // the run frames carry the whole body forward and back; take that drift out so it runs in place
+      for (const t of geo.morphAttributes.position || []) {
+        const n = t.count, m = [0, 0, 0];
+        for (let i = 0; i < n; i++) { m[0] += t.getX(i); m[1] += t.getY(i); m[2] += t.getZ(i); }
+        for (let i = 0; i < n; i++) t.setXYZ(i, t.getX(i) - m[0] / n, t.getY(i) - m[1] / n * 0.5, t.getZ(i) - m[2] / n);
+      }
+    }
     map = src.material.map || null;
   }
-  geo.rotateY(sp.yaw);
+  xf(geo, new THREE.Matrix4().makeRotationY(sp.yaw));
+  const morphs = geo.morphAttributes;
+  geo.morphAttributes = {}; // size the animal by its rest pose, not the run frames
   geo.computeBoundingBox();
   let b = geo.boundingBox, c = b.getCenter(new THREE.Vector3());
   geo.translate(-c.x, -b.min.y, -c.z);
-  geo.scale(...Array(3).fill(sp.length / (b.max.z - b.min.z)));
+  const k = sp.length / (b.max.z - b.min.z);
+  geo.morphAttributes = morphs;
+  xf(geo, new THREE.Matrix4().makeScale(k, k, k));
+  geo.morphAttributes = {};
   geo.computeBoundingBox();
+  geo.morphAttributes = morphs;
   geo.computeVertexNormals();
   b = geo.boundingBox;
-  return { name, sp, geo, map, L: b.max.z - b.min.z, H: b.max.y, W: b.max.x - b.min.x };
+  return { name, sp, geo, map, morphN: (geo.morphAttributes.position || []).length, L: b.max.z - b.min.z, H: b.max.y, W: b.max.x - b.min.x };
 }
 
 // Floating Z's over sleeping animals.
@@ -222,7 +266,7 @@ const from = new CANNON.Vec3(), to = new CANNON.Vec3();
 class Animal {
   constructor(game, proto, { x, z, scale = 1, region, group }) {
     this.game = game;
-    this.kind = proto.name;
+    this.kind = proto.sp.kind || proto.name;
     this.sp = proto.sp;
     this.region = region;
     this.group = group;
@@ -247,6 +291,8 @@ class Animal {
       color: sp.color ?? 0xffffff, map: proto.map, flatShading: true, roughness: 0.9, vertexColors: !!proto.geo.attributes.color,
     }), this.u);
     this.mesh = new THREE.Mesh(proto.geo, material);
+    this.morphN = proto.morphN;
+    if (this.morphN) { this.u.uStride.value = 0; this.u.uLift.value = 0; } // the morph cycle moves the legs
     this.mesh.customDepthMaterial = patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), this.u);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
@@ -309,10 +355,10 @@ class Animal {
     this.sw = null; // swinging on the vines (baboons)
   }
 
-  startAct() {
+  startAct(name) {
     let acts = ACTS[this.kind].filter((a) => !a.water || this.swimming);
     if (this.swimming && Math.random() < 0.75) acts = acts.filter((a) => a.water || a.name === 'gape');
-    const act = acts[Math.floor(Math.random() * acts.length)];
+    const act = (name && ACTS[this.kind].find((a) => a.name === name)) || acts[Math.floor(Math.random() * acts.length)];
     this.act = act;
     this.actT = 0;
     this.setState('act', act.dur[0] + Math.random() * (act.dur[1] - act.dur[0]));
@@ -400,6 +446,7 @@ class Animal {
 
   // Go and bat a ball about, if there's one in the enclosure.
   findToy() {
+    this.pounced = false;
     let best = null, bd = 18;
     for (const it of this.game.items.list) {
       if (!it.def.toy || this.game.grabber.entity === it) continue;
@@ -421,7 +468,16 @@ class Animal {
     if (!this.game.items.list.includes(it)) { this.toy = null; return; }
     const p = b.position;
     this.target = [p.x, p.z];
-    if (Math.hypot(p.x - this.x, p.z - this.z) > this.L * 0.55 + 0.45) return;
+    const dist = Math.hypot(p.x - this.x, p.z - this.z);
+    // big cats stalk the ball and pounce on it
+    if (this.kind === 'lion' && !this.pounced && dist < 3 + this.L && dist > this.L * 0.8) {
+      this.pounced = true;
+      this.yaw = Math.atan2(p.x - this.x, p.z - this.z);
+      this.pounceToy = it;
+      this.startAct('pounce');
+      return;
+    }
+    if (dist > this.L * 0.55 + 0.45) return;
     const power = { elephant: 7, hippo: 6, gorilla: 6, lion: 5, baboon: 4, penguin: 3 }[this.kind] || 4;
     const a = this.yaw + (Math.random() - 0.5) * 0.8;
     b.wakeUp();
@@ -454,7 +510,7 @@ class Animal {
     if (this.kind !== 'lion' && this.kind !== 'hippo') return null;
     const game = this.game;
     const reach = this.kind === 'lion' ? LION.r - 0.3 : 7;
-    const inside = (x, z) => this.kind === 'lion' ? this.region.contains(x, z) || Math.hypot(x - LION.x, z - LION.z) < reach
+    const inside = (x, z) => this.kind === 'lion' ? this.region.contains(x, z) || Math.hypot(x - this.region.center[0], z - this.region.center[1]) < reach
       : Math.hypot(x - this.x, z - this.z) < reach && Math.hypot(x - HIPPO.x, z - HIPPO.z) < HIPPO.r - 1;
     const p = game.player.body.position;
     if (!game.mods.fly && game.health.player.hp > 0 && inside(p.x, p.z) && p.y < this.y + 3) return { kind: 'player', pos: p };
@@ -683,13 +739,19 @@ class Animal {
         this.actT += dt;
         const d = this.actDur, t2 = this.actT;
         const e = clamp(Math.min(t2 / 0.4, (d - t2) / 0.4), 0, 1);
-        if (this.act.move) { // belly slide: scoot forward while lying down
-          const nx = this.x + Math.sin(this.yaw) * this.act.move * e * dt, nz = this.z + Math.cos(this.yaw) * this.act.move * e * dt;
+        const mv = this.act.moveAt ? this.act.moveAt(clamp(t2 / d, 0, 1)) * Math.min(1.4, this.scale) : (this.act.move || 0) * e;
+        if (mv) { // belly slide / pounce: scoot forward
+          const nx = this.x + Math.sin(this.yaw) * mv * dt, nz = this.z + Math.cos(this.yaw) * mv * dt;
           if (this.region.contains(nx, nz)) { this.x = nx; this.z = nz; this.y = this.groundAt(nx, nz); }
         }
         this.pose = this.act.pose(t2, clamp(t2 / d, 0, 1), e);
         headYaw = this.pose.headYaw || 0;
         headPitch = this.pose.headPitch || 0;
+        if (this.act.name === 'pounce' && this.pounceToy && t2 / d > 0.78) {
+          const tb = this.pounceToy.body, dd = Math.hypot(tb.position.x - this.x, tb.position.z - this.z);
+          if (dd < this.L * 0.9) { tb.wakeUp(); tb.velocity.set(Math.sin(this.yaw) * 6, 4, Math.cos(this.yaw) * 6); sfx.boing?.(); }
+          this.pounceToy = null;
+        }
         if (this.act.name === 'dunk' && !this.splashed && t2 > d - 0.6) { this.splashed = true; sfx.splash(this.loud(0.8)); }
         if (this.timer < 0) { this.splashed = false; this.setState('idle', 1 + Math.random() * 3); }
         break;
@@ -819,6 +881,15 @@ class Animal {
     u.uSleep.value = this.sleep;
     u.uTime.value = t + this.seed;
     u.uHeadYaw.value = this.headYaw;
+    if (this.morphN) {
+      // scrub the running cycle with the gait phase; blend toward the rest pose when standing still
+      const inf = this.mesh.morphTargetInfluences, n = this.morphN;
+      const w = Math.min(1, this.walk * 1.2) * (1 - (this.sleep || 0));
+      const f = ((((this.phase / (Math.PI * 2)) % 1) + 1) % 1) * n, i0 = Math.floor(f) % n, i1 = (i0 + 1) % n, a = f - Math.floor(f);
+      inf.fill(0);
+      inf[i0] += (1 - a) * w;
+      inf[i1] += a * w;
+    }
     const stepping = Math.min(1, this.walk);
     u.uHeadPitch.value = this.headPitch + Math.sin(this.phase * 2) * 0.05 * stepping; // head nods with each step
 
@@ -1153,7 +1224,7 @@ function buildSplashes(game) {
 }
 
 export async function buildAnimals(game) {
-  const [lion, hippo, baboon, penguin, elephant, gorilla] = await Promise.all(['lion', 'hippo', 'baboon', 'penguin', 'elephant', 'gorilla'].map(loadSpecies));
+  const [lion, hippo, baboon, penguin, elephant, gorilla, biglion] = await Promise.all(['lion', 'hippo', 'baboon', 'penguin', 'elephant', 'gorilla', 'biglion'].map(loadSpecies));
   const animals = { list: [], waterY: pondWaterY(), vines: buildVines(game), pools: game.habitats.pools };
   const splashes = buildSplashes(game);
   animals.splash = splashes.spawn;
@@ -1173,8 +1244,15 @@ export async function buildAnimals(game) {
     return a;
   };
   const lions = [], hippos = [], baboons = [];
-  add(lion, lionArea, lions, { scale: 1.6, at: [LION.x + 3, LION.z + 2] });
-  add(lion, lionArea, lions, { scale: 1.4, at: [LION.x - 4, LION.z - 1] });
+  add(lion, lionArea, lions, { scale: 1.05, at: [LION.x + 3, LION.z + 2] });
+  add(lion, lionArea, lions, { scale: 0.92, at: [LION.x - 4, LION.z - 1] });
+  add(lion, lionArea, lions, { scale: 0.42, at: [LION.x, LION.z + 4] }); // cub
+  // the lion den: a big male, a younger one and a cub
+  const denArea = circle(DEN.x, DEN.z, DEN.r * Math.cos(Math.PI / 5) - 1.3);
+  const pride = [];
+  add(biglion, denArea, pride, { scale: 1, at: [DEN.x + 1, DEN.z] });
+  add(biglion, denArea, pride, { scale: 0.8, at: [DEN.x - 2, DEN.z + 2] });
+  add(biglion, denArea, pride, { scale: 0.38, at: [DEN.x, DEN.z - 2] });
   add(hippo, hippoArea, hippos, { scale: 1, at: [POND.x + 1, POND.z + 1] });
   add(hippo, hippoArea, hippos, { scale: 0.55, at: [POND.x - 2, POND.z - 2] }); // calf
   for (let i = 0; i < 4; i++) add(baboon, monkeyArea, baboons, { scale: i === 0 ? 1.15 : 0.8 + Math.random() * 0.25 });
@@ -1201,6 +1279,7 @@ export async function buildAnimals(game) {
   toy(PENGUIN.x + 2.5, PENGUIN.z + 1, 0.7);
   toy(ELEPHANT.x - 1, ELEPHANT.z + 3, 2.2);
   toy(GORILLA.x + 1, GORILLA.z - 1, 1.4);
+  toy(DEN.x - 1, DEN.z + 1.5, 1.3);
 
   // Food left inside an enclosure gets eaten by whoever's closest and not busy.
   let foodCd = 1;

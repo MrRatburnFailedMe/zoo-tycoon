@@ -6,6 +6,8 @@ import { heightAt, pondWaterY } from './world/terrain.js';
 import { POND, PLAZA, DUMPSTER, ENCLOSURES, GATE, OFFICE, LION } from './world/layout.js';
 import { sfx } from './audio.js';
 import { canvasTexture } from './util/textures.js';
+import { modelInto } from './world/props.js';
+import { music } from './audio.js';
 
 const V = (x, y, z) => new CANNON.Vec3(x, y, z);
 const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -107,12 +109,10 @@ export const ITEMS = {
   },
   trashbag: {
     name: 'Trash Bag', mass: 2.5, trash: true, sound: 'soft', linearDamping: 0.1,
+    // trash bag by Jens Kull
     build() {
       const g = new THREE.Group();
-      const b = add(g, new THREE.IcosahedronGeometry(0.3, 1), 0x24272b, 0, 0, 0, { roughness: 0.35 });
-      b.scale.set(1, 1.15, 0.95);
-      add(g, new THREE.ConeGeometry(0.08, 0.14, 5), 0x24272b, 0, 0.38, 0, { roughness: 0.35 });
-      add(g, B(0.12, 0.03, 0.03), 0xf1c40f, 0, 0.33, 0);
+      modelInto(g, 'assets/trashbag.glb', { height: 0.72, dy: -0.31, rough: 0.35, recolor: () => new THREE.Color(0x2b3036) });
       return { group: g, shapes: [{ shape: new CANNON.Sphere(0.31) }] };
     },
   },
@@ -173,16 +173,11 @@ export const ITEMS = {
   },
   chair: {
     name: 'Office Chair', mass: 9, sound: 'wood',
-    build() {
+    // Office Chair by Quaternius; the fabric comes in a few colours
+    build({ color } = {}) {
       const g = new THREE.Group();
-      add(g, B(0.5, 0.08, 0.5), 0x2d3238, 0, 0.46, 0);
-      add(g, B(0.48, 0.55, 0.06), 0x2d3238, 0, 0.78, -0.23);
-      add(g, new THREE.CylinderGeometry(0.035, 0.035, 0.38, 6), 0x777777, 0, 0.23, 0);
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        const leg = add(g, B(0.05, 0.04, 0.3), 0x333333, Math.sin(a) * 0.14, 0.04, Math.cos(a) * 0.14);
-        leg.rotation.y = a;
-      }
+      const fabric = color ?? [0x3f78c2, 0xe2523c, 0x2fb38a, 0x8e55a8, 0xffb347, 0x4a4f57][Math.floor(Math.random() * 6)];
+      modelInto(g, 'assets/officechair.glb', { height: 1.05, yaw: 0, recolor: (m) => (m.color && m.color.b > m.color.r * 1.4 ? new THREE.Color(fabric) : null) });
       return {
         group: g,
         shapes: [
@@ -272,6 +267,16 @@ export const ITEMS = {
       add(g, B(0.7, 0.032, 0.08), 0x2fb38a, 0, 0, 0);
       return { group: g, shapes: [{ shape: box(0.35, 0.02, 0.25) }], radius: 0.35 };
     },
+  },
+  radio: {
+    name: 'Radio', mass: 1.5, sound: 'wood', useLabel: 'Music on / off',
+    // Radio by Quaternius
+    build() {
+      const g = new THREE.Group();
+      modelInto(g, 'assets/radio.glb', { size: 0.38, dy: -0.12 });
+      return { group: g, shapes: [{ shape: box(0.19, 0.12, 0.08) }], radius: 0.2 };
+    },
+    use(game, item) { const on = music.toggle(); game.animals.shout(on ? 'music on' : 'music off', item.body.position.x, item.body.position.y + 0.5, item.body.position.z, '#ffd34d'); },
   },
   card: {
     name: 'Bank card', mass: 0.05, sound: 'soft', linearDamping: 0.4, angularDamping: 0.6,
@@ -481,7 +486,11 @@ export function spawnStarterItems(game) {
   at('banana', PLAZA.x + 6, PLAZA.z - 2, 0.2);
   at('banana', 1.5, 26, 0.2);
 
-  items.spawn('chair', s.chair[0], s.chair[1], s.chair[2], { yaw: -Math.PI / 2 });
+  items.spawn('chair', s.chair[0], s.chair[1], s.chair[2], { yaw: -Math.PI / 2, color: 0x3f78c2 });
+  items.spawn('chair', s.table[0] - 0.9, s.chair[1], s.table[2] - 0.4, { yaw: Math.PI / 2, color: 0xe2523c });
+  items.spawn('chair', s.table[0] + 0.9, s.chair[1], s.table[2] + 0.5, { yaw: -Math.PI / 2, color: 0x2fb38a });
+  items.spawn('chair', s.friend[0] - 1.2, s.chair[1], s.friend[2] + 0.4, { yaw: 2.4, color: 0x8e55a8 });
+  items.spawn('radio', s.desk[0], s.desk[1] + 0.05, s.desk[2] + 0.55, { yaw: Math.PI / 2 });
   items.spawn('megaphone', s.table[0] - 0.2, s.table[1] + 0.1, s.table[2]);
   items.spawn('banana', s.table[0] + 0.3, s.table[1], s.table[2] + 0.1);
   items.spawn('mug', s.desk[0], s.desk[1], s.desk[2]);
