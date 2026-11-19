@@ -13,7 +13,7 @@ export const MASK = {
 export function createPhysics() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
   world.broadphase = new CANNON.SAPBroadphase(world);
-  world.solver.iterations = 12;
+  world.solver.iterations = 9;
   world.allowSleep = true;
 
   const contact = { friction: 0.45, restitution: 0.12, contactEquationStiffness: 1e7, contactEquationRelaxation: 3 };

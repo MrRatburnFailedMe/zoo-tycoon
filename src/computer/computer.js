@@ -28,7 +28,7 @@ export class Computer {
       <div class="monitor">
         <div class="screen">
           <div class="wallpaper"><div class="sun"></div><div class="hill h1"></div><div class="hill h2"></div><div class="brandmark">ZooOS</div></div>
-          <div class="desk-icons"><button class="dicon" data-app="browser">${GLOBE_SVG}<span>Browser</span></button>${Object.entries(APPS).map(([k, a]) => `<button class="dicon" data-app="${k}"><i class="emo" style="background:${a.color}">${a.icon}</i><span>${a.name}</span></button>`).join('')}<button class="dicon" data-app="shop"><i class="emo" style="background:#2fb38a">ZM</i><span>ZooMart</span></button></div>
+          <div class="desk-icons"><button class="dicon" data-app="browser">${GLOBE_SVG}<span>The Interwebs</span></button>${Object.entries(APPS).map(([k, a]) => `<button class="dicon" data-app="${k}"><i class="emo" style="background:${a.color}">${a.icon}</i><span>${a.name}</span></button>`).join('')}<button class="dicon" data-app="shop"><i class="emo" style="background:#2fb38a">ZM</i><span>ZooMart!!</span></button></div>
           <div class="window awin hidden"><div class="a-top"><b class="a-title"></b><div class="wbtns"><button class="wbtn" data-a="max">&#x25A1;</button><button class="wbtn close" data-a="close">&#x2715;</button></div></div><div class="a-view"></div></div>
           <div class="window bwin hidden">
             <div class="b-top">
@@ -49,13 +49,13 @@ export class Computer {
           </div>
           <div class="taskbar">
             <div class="start">ZooOS</div>
-            <button class="task-btn hidden">${GLOBE_SVG}<span>Browser</span></button>
+            <button class="task-btn hidden">${GLOBE_SVG}<span>The Interwebs</span></button>
             <button class="task-btn app-btn hidden"><i class="emo"></i><span></span></button>
             <div class="spacer"></div>
             <div class="tray"><span class="tray-money"></span><span class="clock"></span></div>
           </div>
         </div>
-        <div class="monitor-chin"><span class="brand">ZOOTRONIX</span><button class="standup">Stand up <kbd>Esc</kbd></button></div>
+        <div class="monitor-chin"><span class="brand">ZOOTRONIX</span><button class="standup">Get up, lazybones <kbd>Esc</kbd></button></div>
       </div>`;
 
     this.win = this.el.querySelector('.bwin');

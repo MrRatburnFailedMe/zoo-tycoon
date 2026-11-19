@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildCozy } from './cozy.js';
 import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { solidBox, mat, mesh, BLOCKER } from '../util/build.js';
@@ -63,13 +64,9 @@ export function buildOffice(game) {
   // Roof with overhang + trim.
   solidBox(game, { size: [w + 0.9, 0.28, d + 0.9], pos: [ox, floorY + H + 0.14, oz], color: 0x4b5560 });
   solidBox(game, { size: [w + 1.0, 0.12, d + 1.0], pos: [ox, floorY + H + 0.34, oz], color: 0x3a434c, collide: false });
-  const sign = mesh(new THREE.PlaneGeometry(3.2, 0.7), new THREE.MeshStandardMaterial({ map: signTexture('ZOO HQ', { bg: '#3d7a3a', fg: '#ffe27a', sub: 'STAFF ONLY' }), roughness: 0.6 }), { cast: false });
-  sign.position.set(xe + 0.12, floorY + 2.72, oz);
-  sign.rotation.y = Math.PI / 2;
-  scene.add(sign);
 
   // Interior light.
-  const lamp = new THREE.PointLight(0xffe2b0, 14, 14, 1.6);
+  const lamp = new THREE.PointLight(0xffc98a, 13, 14, 1.6); // warm and cosy
   lamp.position.set(ox, floorY + 2.6, oz);
   scene.add(lamp);
   const panel = mesh(new THREE.BoxGeometry(1.6, 0.05, 0.5), mat(0xffffff, { emissive: 0xfff2d0, emissiveIntensity: 2 }), { cast: false });
@@ -166,11 +163,6 @@ export function buildOffice(game) {
   tableBody.position.set(ox + 0.8, fy + 0.37, oz + 0.4);
   game.world.addBody(tableBody);
 
-  // Rug.
-  const rug = mesh(new THREE.CircleGeometry(1.5, 20), mat(0xb5523b, { roughness: 1 }), { cast: false });
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(ox + 0.6, fy + 0.012, oz + 0.3);
-  scene.add(rug);
 
   // Whiteboard on the north wall.
   const wb = mesh(new THREE.PlaneGeometry(2.4, 1.25), new THREE.MeshStandardMaterial({ map: whiteboardTexture(), roughness: 0.4 }), { cast: false });
@@ -183,11 +175,8 @@ export function buildOffice(game) {
   scene.add(tray);
   scene.add(frame);
 
-  // Poster on the south wall.
-  const poster = mesh(new THREE.PlaneGeometry(0.8, 1.05), new THREE.MeshStandardMaterial({ map: posterTexture(), roughness: 0.8 }), { cast: false });
-  poster.position.set(ox - 0.6, fy + 1.6, zs - T / 2 - 0.08);
-  poster.rotation.y = Math.PI;
-  scene.add(poster);
+  // Posters, bookshelf, string lights, curtains, the office cat...
+  const cozy = buildCozy(game, { xw, xe, zn, zs, fy, H, T, deskX, deskZ });
 
   return {
     floorY,
@@ -200,6 +189,7 @@ export function buildOffice(game) {
       friend: [ox + 1.6, fy, oz - 1.6],
     },
     update() {
+      cozy.update(game.time);
       // keep the door awake-ish so it reacts promptly when pushed
       if (doorBody.sleepState === CANNON.Body.SLEEPING && game.player && game.player.body.position.distanceTo(doorBody.position) < 2) doorBody.wakeUp();
     },

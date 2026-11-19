@@ -59,32 +59,47 @@ const VERT = /* glsl */`
 {
   vec3 p = position;
   // legs: everything below the leg line, except the tail
+  float isLeg = step(p.y, uLegTop) * step(uTailZ, p.z);
   float legF = clamp(1.0 - p.y / uLegTop, 0.0, 1.0) * step(uTailZ, p.z);
   float fr = step(0.0, p.z), sd = step(0.0, p.x);
   // walking: four-beat (left hind, left fore, right hind, right fore); galloping: fronts then hinds
   float ph = uPhase + mix(3.14159 * sd + 1.5708 * fr, 3.14159 * fr + 0.6 * sd, uGallop);
   float swing = sin(ph), up = max(0.0, cos(ph)); // up > 0 while the foot travels forward in the air
-  float lower = smoothstep(0.4, 1.0, legF); // knee/hock down
-  transformed.z += swing * uStride * legF * uWalk;
-  transformed.z -= up * uLift * 0.8 * lower * uWalk; // the lower leg folds back as the foot lifts
-  float lift = up * uLift * legF * legF * uWalk;
+  float legOn = step(0.0001, uStride) * uWalk;
+  // knee / hock joint half way down: the lower leg folds back while the foot is in the air
+  float kneeY = uLegTop * 0.5;
+  float below = smoothstep(kneeY + 0.12 * uLegTop, kneeY - 0.12 * uLegTop, p.y) * isLeg;
+  float kneeA = up * legOn * (0.85 + 0.45 * uGallop) * below;
+  vec2 d = vec2(p.y - kneeY, 0.0);
+  d = vec2(d.x * cos(kneeA) - d.y * sin(kneeA), d.x * sin(kneeA) + d.y * cos(kneeA));
+  vec2 yz = mix(vec2(p.y, 0.0), vec2(kneeY + d.x, d.y), below);
+  // hip / shoulder joint: the whole leg swings about the top of the leg
+  float hipA = -swing * (uStride / max(uLegTop, 0.001)) * legOn * isLeg;
+  vec2 h = vec2(yz.x - uLegTop, yz.y);
+  h = vec2(h.x * cos(hipA) - h.y * sin(hipA), h.x * sin(hipA) + h.y * cos(hipA));
+  yz = mix(yz, vec2(uLegTop + h.x, h.y), isLeg);
+  transformed.z += yz.y;
+  float ly = yz.x + up * uLift * 0.5 * legF * legOn;
   // lying down: fold the legs, lower the body
-  float low = min(p.y, uLegTop), high = max(p.y - uLegTop, 0.0);
-  transformed.y = low * (1.0 - 0.72 * uSleep) + high + lift;
+  float low = min(ly, uLegTop), high = max(p.y - uLegTop, 0.0);
+  transformed.y = low * (1.0 - 0.72 * uSleep) + high;
+  // the spine flexes side to side with the stride
+  transformed.x += sin(uPhase + p.z / max(uL, 0.01) * 2.5) * 0.018 * uL * uWalk * (1.0 - legF);
   // breathing
   float rate = mix(2.6, 1.2, uSleep);
   transformed.x *= 1.0 + sin(uTime * rate) * mix(0.02, 0.05, uSleep) * (1.0 - legF);
-  // head turn / nod around the neck
-  float hw = smoothstep(uHeadZ, uHeadZ + 0.14 * uL, p.z);
-  vec3 piv = vec3(0.0, uNeckY - 0.72 * uSleep * uLegTop, uHeadZ);
-  vec3 d = transformed - piv;
+  // head turn / nod: the neck bends gradually from the shoulders to the head
+  float hw = smoothstep(uHeadZ - 0.14 * uL, uHeadZ + 0.16 * uL, p.z);
+  vec3 piv = vec3(0.0, uNeckY - 0.72 * uSleep * uLegTop, uHeadZ - 0.1 * uL);
+  vec3 dv = transformed - piv;
   float a = uHeadPitch * hw, b = uHeadYaw * hw;
-  d = vec3(d.x, d.y * cos(a) - d.z * sin(a), d.y * sin(a) + d.z * cos(a));
-  d = vec3(d.x * cos(b) + d.z * sin(b), d.y, -d.x * sin(b) + d.z * cos(b));
-  transformed = piv + d;
-  // tail swish
+  dv = vec3(dv.x, dv.y * cos(a) - dv.z * sin(a), dv.y * sin(a) + dv.z * cos(a));
+  dv = vec3(dv.x * cos(b) + dv.z * sin(b), dv.y, -dv.x * sin(b) + dv.z * cos(b));
+  transformed = piv + dv;
+  // tail: a wave travelling down it, so it curls instead of swinging stiffly
   float tw = clamp((uTailZ - p.z) / (0.25 * uL), 0.0, 1.0);
-  transformed.x += sin(uTime * 2.3 + p.z * 3.0) * uTail * tw * (1.0 - 0.7 * uSleep);
+  transformed.x += sin(uTime * 2.3 + p.z * 6.0 / max(uL, 0.01)) * uTail * tw * tw * 1.6 * (1.0 - 0.7 * uSleep);
+  transformed.y += sin(uTime * 1.7 + p.z * 4.0) * uTail * 0.4 * tw * (1.0 - uSleep);
 }`;
 
 // Little routines each species breaks into now and then. pose() gets the time into the act (t),
@@ -153,9 +168,9 @@ const ACTS = {
 // What each small animal does when you pick it up: words it yells, how often, and in what colour.
 const PANIC = {
   lion: { words: ['MEW!', 'RAWR!', 'GRRR!', 'I AM FEROCIOUS!', 'HISSS!'], color: '#ffcc66', every: 0.8 },
-  baboon: { words: ['EEK!', 'OOK OOK!!', 'LET GO!', 'EEEEE!'], color: '#ffd23a', every: 0.75 },
+  baboon: { words: ['EEEEEEK!', 'OOK OOK!!', 'SCREEEE!', 'EEEEE!', 'AAAAAH!'], color: '#ffd23a', every: 0.5 },
   hippo: { words: ['AAAAAAAH!', 'WAAAAAH!', 'MOMMY!!', 'PUT ME DOWN!', 'AAAAA!'], color: '#ff7aa8', every: 1.15 },
-  penguin: { words: ['SQUAWK!', 'HONK HONK!', 'NOT THE FACE!', 'FLAP FLAP!', 'I CAN\'T FLY!!'], color: '#9fe0ff', every: 0.7 },
+  penguin: { words: ['honk.', '...', 'oh, hello.', 'honk?'], color: '#9fe0ff', every: 2.6, calm: true },
   elephant: { words: ['PAWOOOO!', 'MAMA!!', 'TOOT TOOT!', 'PUT ME DOWN!'], color: '#c9b6ff', every: 1.1 },
   gorilla: { words: ['OOH OOH!', 'GRRR!', 'HANDS OFF!', 'OOK!'], color: '#ffb36b', every: 0.8 },
 };
@@ -605,16 +620,17 @@ class Animal {
     const panic = PANIC[this.kind];
 
     if (held) {
-      // squirm round to face you, wriggling
-      b.quaternion.setFromEuler(Math.sin(t * 13) * 0.18 - 0.1, game.player.yaw + Math.sin(t * 9) * 0.32, Math.sin(t * 11.5) * 0.22, 'YXZ'); // thrashing, glaring at you
-      if (Math.random() < dt * 1.5) game.player.shake = Math.max(game.player.shake || 0, 0.25);
+      // facing you. Penguins just sit there blinking; hippos squirm like mad; the rest thrash
+      if (panic.calm) b.quaternion.setFromEuler(Math.sin(t * 1.3) * 0.05, game.player.yaw + Math.sin(t * 0.8) * 0.12, 0, 'YXZ');
+      else if (this.kind === 'hippo') b.quaternion.setFromEuler(Math.sin(t * 7) * 0.35, game.player.yaw + Math.sin(t * 5.3) * 0.6, Math.sin(t * 9) * 0.5, 'YXZ');
+      else b.quaternion.setFromEuler(Math.sin(t * 13) * 0.18 - 0.1, game.player.yaw + Math.sin(t * 9) * 0.32, Math.sin(t * 11.5) * 0.22, 'YXZ');
+      if (!panic.calm && Math.random() < dt * (this.kind === 'hippo' ? 4 : 1.5)) game.player.shake = Math.max(game.player.shake || 0, this.kind === 'hippo' ? 0.45 : 0.25);
       b.angularVelocity.set(0, 0, 0);
       this.shoutCd -= dt;
       if (this.shoutCd < 0) {
         this.shoutCd = panic.every * (0.8 + Math.random() * 0.5);
         this.shout(panic.words[Math.floor(Math.random() * panic.words.length)]);
-        if (this.kind === 'hippo') sfx.scream(1); else this.say();
-        if (this.kind === 'penguin') this.flapT = 0.5;
+        if (this.kind === 'hippo') sfx.scream(1); else if (this.kind === 'baboon') sfx.screech?.(); else this.say();
       }
       if (SLAPPERS.includes(this.kind)) {
         // windmill slaps to the face
@@ -624,10 +640,13 @@ class Animal {
           this.slapT -= dt;
           if (this.slapT <= 0) {
             sfx.slap();
-            game.player.shake = 0.7;
-            game.player.yaw += (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.12); // head snaps sideways
-            game.health.damagePlayer(2);
-            this.shout(Math.random() < 0.6 ? 'SLAP!' : 'BONK!', '#ffffff');
+            if (this.kind === 'baboon') sfx.screech?.();
+            game.player.shake = 0.9;
+            game.player.yaw += (Math.random() < 0.5 ? -1 : 1) * (0.14 + Math.random() * 0.14); // head snaps sideways
+            game.player.pitch += (Math.random() - 0.5) * 0.15;
+            game.hud.flashHurt?.(0.5);
+            game.health.damagePlayer(3);
+            this.shout(Math.random() < 0.6 ? 'SMACK!' : 'SLAP!', '#ffffff');
           }
         }
       } else {
@@ -642,7 +661,7 @@ class Animal {
           o.actDur = 2.2;
         }
       }
-      if (this.kind === 'baboon' || this.kind === 'penguin') for (const o of this.group) if (o !== this && o.noiseCd < 0 && Math.random() < dt * 0.6) { o.say(); o.noiseCd = 3; }
+      if (this.kind === 'baboon') for (const o of this.group) if (o !== this && o.noiseCd < 0 && Math.random() < dt * 0.6) { o.say(); o.noiseCd = 3; }
     } else {
       // tossed: wait until it comes to rest, then pick itself up
       const v = b.velocity.length();
@@ -667,11 +686,13 @@ class Animal {
     u.uHeadYaw.value = Math.sin(t * (this.kind === 'hippo' ? 14 : 24)) * 0.55 * k;
     const lunge = this.slapT > 0 ? Math.sin((1 - this.slapT / 0.16) * Math.PI) : 0;
     if (this.kind === 'penguin') {
-      // flapping like it might take off (it won't)
-      u.uHeadPitch.value = -0.4;
-      const sq = 1 + Math.sin(t * 30) * 0.1 * k;
+      // perfectly calm: a little head tilt, the odd slow flipper flap
+      u.uWalk.value = held ? 0.05 : 0.7;
+      u.uHeadYaw.value = Math.sin(t * 0.9) * 0.35;
+      u.uHeadPitch.value = 0.1 + Math.sin(t * 0.6) * 0.1;
+      const sq = 1 + Math.max(0, Math.sin(t * 2.2)) * 0.03;
       this.mesh.scale.set(sq, 1 / sq, 1);
-      this.tilt.rotation.set(Math.sin(t * 7) * 0.3 * k, 0, Math.sin(t * 26) * 0.35 * k);
+      this.tilt.rotation.set(0, 0, Math.sin(t * 1.4) * 0.08);
     } else if (this.kind === 'hippo' || this.kind === 'elephant') {
       u.uHeadPitch.value = -0.95 + Math.sin(t * 20) * 0.1; // mouth wide open, screaming
       const puff = 1 + Math.abs(Math.sin(t * 5)) * 0.18 * k;
@@ -842,6 +863,17 @@ class Animal {
       this.dizzy -= dt;
       headYaw = Math.sin(t * 7) * 0.7; headPitch = 0.3;
       if (this.dizzy <= 0) this.startle(this.game.player.body.position);
+    }
+    // Looking around: idle animals glance about, and anything awake keeps an eye on you when you're close.
+    if (!sleeping && this.state !== 'act' && this.dizzy <= 0 && this.state !== 'swing') {
+      const pp = this.game.player.body.position, dx = pp.x - this.x, dz = pp.z - this.z, dist = Math.hypot(dx, dz);
+      this.lookCd = (this.lookCd ?? Math.random() * 4) - dt;
+      if (this.lookCd < 0) { this.lookCd = 2 + Math.random() * 4; this.glance = (Math.random() - 0.5) * 1.6; this.glanceP = (Math.random() - 0.5) * 0.5; }
+      if (dist < 14 && dist > 0.5) {
+        const rel = angleDiff(Math.atan2(dx, dz), this.yaw);
+        if (Math.abs(rel) < 2.2) { headYaw += clamp(rel, -1.1, 1.1) * (walking ? 0.5 : 0.9); headPitch += clamp(-(pp.y - this.y - this.H) / Math.max(dist, 1), -0.4, 0.4) * 0.6; }
+      } else if (!walking) { headYaw += this.glance; headPitch += this.glanceP; }
+      else headYaw += this.glance * 0.3;
     }
     if (this.yawn > 0) { headPitch = -0.55 * Math.sin((this.yawn / 1.2) * Math.PI); headYaw = 0; }
     if (this.lunge > 0) headPitch = -0.3;

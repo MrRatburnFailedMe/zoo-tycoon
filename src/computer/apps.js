@@ -8,20 +8,20 @@ const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 6
 
 export const APPS = {
   gate: {
-    name: 'Gate Desk',
+    name: 'Ticket Brain',
     icon: 'GD',
     color: '#e2523c',
     render: () => `<div class="app-gate">
       <div class="ag-top">
-        <div class="ag-stat"><small>IN QUEUE</small><b class="ag-q">0</b></div>
-        <div class="ag-stat"><small>IN THE PARK</small><b class="ag-in">0</b></div>
-        <div class="ag-stat"><small>TICKETS SOLD</small><b class="ag-sold">0</b></div>
-        <div class="ag-stat"><small>TICKET PRICE</small><b class="ag-price">$0</b><input type="range" min="1" max="80" class="ag-range" /></div>
+        <div class="ag-stat"><small>WAITING (grumpily)</small><b class="ag-q">0</b></div>
+        <div class="ag-stat"><small>GAWKING AT ANIMALS</small><b class="ag-in">0</b></div>
+        <div class="ag-stat"><small>TICKETS YEETED</small><b class="ag-sold">0</b></div>
+        <div class="ag-stat"><small>TICKET PRICE (be nice)</small><b class="ag-price">$0</b><input type="range" min="1" max="80" class="ag-range" /></div>
       </div>
       <div class="ag-cols">
-        <section><h3>Recent sales</h3><table class="ag-tx"></table></section>
+        <section><h3>People who gave us money!!</h3><table class="ag-tx"></table></section>
       </div>
-      <p class="ag-tip">Customers order at the window. Print tickets on the printer and hand them over, swipe cards on the reader, and ring cash up at the register.</p>
+      <p class="ag-tip">Psst! Customers yell their order at the window. Cash goes in the register (sort it into the right holes!), cards go through the swipey thing, and the printer spits out tickets with a rubber band on. Don't forget their change. They WILL notice.</p>
     </div>`,
     bind(view, ctx) {
       const r = view.querySelector('.ag-range');
@@ -35,27 +35,27 @@ export const APPS = {
       set('.ag-sold', state.ticketsSold);
       set('.ag-price', money(state.ticketPrice));
       view.querySelector('.ag-tx').innerHTML = visitors.history.slice(0, 14).map((h) =>
-        `<tr><td>${ago(h.time)}</td><td>${esc(h.name)}</td><td>${esc(h.how)}</td><td class="${h.paid ? 'p' : 'n'}">${h.paid ? '+' + money(h.paid) : '-'}</td></tr>`).join('') || '<tr><td>No sales yet</td></tr>';
+        `<tr><td>${ago(h.time)}</td><td>${esc(h.name)}</td><td>${esc(h.how)}</td><td class="${h.paid ? 'p' : 'n'}">${h.paid ? '+' + money(h.paid) : '-'}</td></tr>`).join('') || '<tr><td>No money yet. Sad trombone.</td></tr>';
     },
   },
 
   analytics: {
-    name: 'Analytics',
+    name: 'Money Go Brrr',
     icon: 'AN',
     color: '#58b8f0',
     render: () => `<div class="app-an">
       <div class="an-top">
-        <div><small>BANK</small><b class="an-bank"></b></div>
-        <div><small>INCOME</small><b class="an-in p"></b></div>
-        <div><small>EXPENSES</small><b class="an-out n"></b></div>
-        <div><small>PROFIT</small><b class="an-net"></b></div>
+        <div><small>PIGGY BANK</small><b class="an-bank"></b></div>
+        <div><small>MONEY IN :)</small><b class="an-in p"></b></div>
+        <div><small>MONEY OUT :(</small><b class="an-out n"></b></div>
+        <div><small>THE GOOD NUMBER</small><b class="an-net"></b></div>
       </div>
-      <h3>Money in and out, every 30 seconds</h3>
+      <h3>Money zooming in and out (every 30 secs, wheee)</h3>
       <canvas class="an-chart" width="760" height="260"></canvas>
       <div class="an-legend">${Object.entries(CATEGORIES).map(([, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join('')}</div>
       <div class="an-cols">
-        <section><h3>Totals by category</h3><canvas class="an-bars" width="360" height="190"></canvas></section>
-        <section><h3>Staff</h3><table class="an-staff"></table></section>
+        <section><h3>Where did it all go??</h3><canvas class="an-bars" width="360" height="190"></canvas></section>
+        <section><h3>The crew (and their snack money)</h3><table class="an-staff"></table></section>
       </div>
     </div>`,
     live(view, { state }) {
@@ -113,7 +113,7 @@ function drawTimeline(cv, hist) {
   });
   g.textAlign = 'center';
   g.fillStyle = '#6b6b6b';
-  g.fillText('now', W - pad.r - bw / 2, H - 6);
+  g.fillText('right now!', W - pad.r - bw / 2, H - 6);
   g.fillText(`${hist.length * 30 >= 60 ? Math.round(hist.length / 2) + ' min' : hist.length * 30 + 's'} ago`, pad.l + (n - hist.length) * bw + bw / 2, H - 6);
 }
 

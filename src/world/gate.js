@@ -199,19 +199,18 @@ export function buildGate(game) {
   const readerIdle = () => rs.draw(['SWIPE', 'CARD']);
   readerIdle();
   let readerT = 0;
-  const swipeCard = { mesh: null, t: 0, payer: null };
+  const swipeCard = { item: null, t: 0, payer: null };
   const readerEntity = {
     label: 'Card reader', interactLabel: 'Swipe card',
     interact() {
       const held = game.grabber.entity;
       if (held?.type !== 'card') { sfx.error(); rs.draw(['NEED', 'A CARD'], '#50200f', '#ffe0d8'); readerT = 1.2; return; }
+      if (swipeCard.item) return;
+      // your hand runs the card through the slot, then you're holding it again
       game.grabber.release();
-      const payer = held.payer;
-      game.items.remove(held);
-      // the card slides through the slot
-      const c = mesh(new THREE.BoxGeometry(0.085, 0.054, 0.004), mat(payer?.cardColor || 0x3f78c2, { metalness: 0.3, roughness: 0.4 }), { cast: false });
-      reader.add(c);
-      swipeCard.mesh = c; swipeCard.t = 0; swipeCard.payer = payer;
+      swipeCard.item = held; swipeCard.t = 0; swipeCard.payer = held.payer;
+      held.body.type = CANNON.Body.KINEMATIC;
+      held.body.collisionResponse = false;
       sfx.swipe();
     },
   };
@@ -244,9 +243,10 @@ export function buildGate(game) {
   game.state.on(() => { if (regT <= 0) regIdle(); });
   let regT = 0;
   const regEntity = {
-    label: 'Cash register', interactLabel: 'Open register',
+    label: 'Cash register', get interactLabel() { const h = game.grabber.entity; return h?.type === 'cash' ? (h.isChange ? 'That\'s their change!' : 'Ring up the cash') : 'Open register'; },
     interact() {
       const held = game.grabber.entity;
+      if (held?.type === 'cash' && held.isChange) { sfx.error(); return; } // that's their change: give it to them
       if (held?.type === 'cash') { game.grabber.release(); register.open(held); }
       else register.open(null);
     },
@@ -338,10 +338,24 @@ export function buildGate(game) {
     // A visitor at the window hands over their payment.
     handOver(v) {
       const x = trayAt.x + (Math.random() - 0.5) * 0.2, z = trayAt.z;
-      const it = game.items.spawn(v.byCard ? 'card' : 'cash', x, trayAt.y, z, { yaw: Math.PI + (Math.random() - 0.5) * 0.6, color: v.cardColor, value: v.tender });
+      const it = game.items.spawn(v.byCard ? 'card' : 'cash', x, trayAt.y, z, { yaw: Math.PI + (Math.random() - 0.5) * 0.6, holder: v.fullName, seed: v.cardSeed, value: v.tender });
       it.payer = v;
-      if (!v.byCard) it.value = v.tender;
+      if (v.byCard) it.label = `${v.name}'s card`;
+      else { it.value = v.tender; it.label = `${v.name}'s cash ($${v.tender})`; }
       sfx.click();
+      return it;
+    },
+    // The register's PRINT: a bundle of tickets, rubber-banded, slides out of the printer.
+    printBundle(n) {
+      printer.updateMatrixWorld();
+      const p = new THREE.Vector3(0, 0.12, 0.22).applyMatrix4(printer.matrixWorld);
+      const it = n > 1 ? game.items.spawn('tickets', p.x, p.y, p.z, { yaw: printer.rotation.y, count: n }) : game.items.spawn('ticket', p.x, p.y, p.z, { yaw: printer.rotation.y });
+      it.count = n;
+      if (n > 1) it.label = `${n} tickets`;
+      const out = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), printer.rotation.y);
+      it.body.velocity.set(out.x * 0.7, 0.5, out.z * 0.7);
+      sfx.print();
+      for (let i = 1; i < Math.min(n, 5); i++) setTimeout(() => sfx.print(), i * 160);
       return it;
     },
     // a visitor walking through spins the arms
@@ -380,22 +394,31 @@ export function buildGate(game) {
         ts.light.material.emissive.setHex(inLane || ts.spin > 0 ? 0xff9900 : 0x22ff44);
       }
 
-      // a swiped card runs through the slot, then the reader approves it
-      if (swipeCard.mesh) {
+      // a swiped card runs through the slot, the reader approves it, and it pops back into your hand
+      if (swipeCard.item) {
+        const it = swipeCard.item;
         swipeCard.t += dt;
-        const k = Math.min(1, swipeCard.t / 0.35);
-        swipeCard.mesh.position.set(-0.12 + k * 0.24, 0.14, -0.03);
+        const k = Math.min(1, swipeCard.t / 0.4);
+        reader.updateMatrixWorld();
+        const p = new THREE.Vector3(-0.12 + k * 0.24, 0.16, -0.03).applyMatrix4(reader.matrixWorld);
+        it.body.position.set(p.x, p.y, p.z);
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, reader.rotation.y, 0, 'YXZ'));
+        it.body.quaternion.set(q.x, q.y, q.z, q.w);
+        it.body.velocity.set(0, 0, 0);
         if (swipeCard.t > 0.6) {
-          reader.remove(swipeCard.mesh);
-          swipeCard.mesh = null;
+          swipeCard.item = null;
+          it.body.type = CANNON.Body.DYNAMIC;
+          it.body.collisionResponse = true;
+          it.body.wakeUp();
           const v = swipeCard.payer;
           if (v && v.awaitingPayment) {
             const amt = game.state.sellTickets(v.n, true);
             v.paidUp();
             rs.draw(['APPROVED', `$${amt}`], '#0f5032', '#d8ffe0');
             sfx.beep();
-          } else { rs.draw(['NO SALE', ''], '#50200f', '#ffe0d8'); sfx.error(); }
+          } else { rs.draw([v ? 'ALREADY' : 'NO SALE', v ? 'PAID' : ''], '#50200f', '#ffe0d8'); sfx.error(); }
           readerT = 2;
+          if (game.items.list.includes(it) && !game.grabber.held) game.grabber.grab({ entity: it, object: it.group, point: null, distance: 0.5 });
         }
       }
       if (readerT > 0 && (readerT -= dt) <= 0) readerIdle();

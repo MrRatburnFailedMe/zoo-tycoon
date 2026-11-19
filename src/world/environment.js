@@ -53,10 +53,10 @@ export function buildEnvironment(game) {
 
   const sun = new THREE.DirectionalLight(0xffe6c2, 2.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.radius = 3;
   const sc = sun.shadow.camera;
-  sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 1; sc.far = 260;
+  sc.left = -42; sc.right = 42; sc.top = 42; sc.bottom = -42; sc.near = 1; sc.far = 260;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
@@ -74,7 +74,8 @@ export function buildEnvironment(game) {
     const c = new THREE.Mesh(merge(parts), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, emissive: 0x9fb4c8, emissiveIntensity: 0.35, fog: false }));
     const a = rand() * Math.PI * 2, r = 80 + rand() * 320;
     c.position.set(Math.cos(a) * r, 80 + rand() * 50, Math.sin(a) * r);
-    c.userData.speed = 1 + rand() * 1.5;
+    c.userData.speed = 5 + rand() * 6;
+    c.userData.bob = rand() * 6;
     scene.add(c);
     clouds.push(c);
   }
@@ -93,7 +94,11 @@ export function buildEnvironment(game) {
       sun.position.copy(target).addScaledVector(sunDir, 120);
       for (const c of clouds) {
         c.position.x += c.userData.speed * dt;
+        c.position.z += c.userData.speed * 0.3 * dt;
+        c.rotation.y += dt * 0.01;
+        c.scale.y = 1 + Math.sin(game.time * 0.2 + c.userData.bob) * 0.08; // clouds slowly puff and shift
         if (c.position.x > 420) c.position.x = -420;
+        if (c.position.z > 420) c.position.z = -420;
       }
     },
   };

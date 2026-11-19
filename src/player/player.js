@@ -269,7 +269,7 @@ export class Player {
   // Camera follows the body with head-bob, landing dip, slip roll and shake.
   postStep(dt) {
     const cam = this.game.camera;
-    const p = this.body.interpolatedPosition;
+    const p = this.driving?.seatWorld ? this.driving.seatWorld(this._seat || (this._seat = new THREE.Vector3())) : this.body.interpolatedPosition;
     const v = this.body.velocity;
     const hv = Math.hypot(v.x, v.z);
     const moving = this.grounded && hv > 0.6;
@@ -300,6 +300,7 @@ export class Player {
       targetRoll += Math.sin(performance.now() * 0.008) * 0.25 * Math.min(1, this.stun);
       pitchOff -= 0.3 * Math.min(1, this.stun);
     }
+    if (this.driving?.flip) targetRoll += this.driving.flip * Math.PI * (this.driving.flipDir || 1); // upside down with the cart
     this.roll += (targetRoll - this.roll) * damp(10, dt);
     let shakeX = 0, shakeY = 0;
     if (this.shake > 0) { shakeX = (Math.random() - 0.5) * this.shake * 0.12; shakeY = (Math.random() - 0.5) * this.shake * 0.12; }

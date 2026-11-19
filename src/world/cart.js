@@ -15,15 +15,19 @@ import { loadGLB } from '../util/glb.js';
 // mesh tilts to follow the slope. Friends and loose items get bowled over.
 
 const MAX_FWD = 9, MAX_REV = 4, ACCEL = 5, BRAKE = 12, WHEELBASE = 1.7;
-const SEAT = new THREE.Vector3(0.33, 0.92, -0.15); // driver's seat (left side), where the player's body centre sits
+const SEAT = new THREE.Vector3(0.27, 0.92, -0.12); // driver's seat (left side), where the player's body centre sits
 const PASSENGER = new THREE.Vector3(-0.33, 1.12, -0.22); // where a seated friend's chest is pinned
+const EYE_DOWN = new THREE.Vector3(0, -0.62, 0); // the player adds eye height back on
 const BED = { x: 0.55, z0: -1.3, z1: -0.62, y0: 0.55, y1: 1.6 }; // cargo area behind the seat (local)
 
 export class GolfCart {
   constructor(game, x, z, yaw = 0) {
     this.game = game;
     this.label = 'Golf Cart';
-    this.interactLabel = 'Drive';
+    this.isCart = true;
+    this.SEAT = SEAT;
+    this.flip = 0; // 0 = on its wheels, 1 = upside down
+    this.flipTarget = 0;
     this.yaw = yaw;
     this.speed = 0;
     this.driving = false;
@@ -51,6 +55,7 @@ export class GolfCart {
     const e = this.game.grabber.entity;
     if (e?.ragdoll) return this.passenger ? 'Seat is taken' : 'Seat passenger';
     if (e) return 'Put in the back';
+    if (this.flipTarget) return 'Flip it back over';
     return 'Drive';
   }
   set interactLabel(_) {}
@@ -69,8 +74,31 @@ export class GolfCart {
     holder.scale.setScalar(k);
     holder.position.set(-((bb.min.x + bb.max.x) / 2) * k, -bb.min.y * k, -((bb.min.z + bb.max.z) / 2) * k);
     for (const c of [...this.tilt.children]) c.visible = false; // retire the box cart
+    // the model's own steering wheel is fixed; ours turns, so swap it in
     this.tilt.add(holder);
     this.model = holder;
+    holder.updateMatrixWorld(true);
+    this.cutWheel(holder);
+    for (const o of this.steer) o.visible = true;
+  }
+
+  // Cut the model's built-in steering wheel and column out of its mesh (every triangle inside a box
+  // round it, in cart space) so our turning wheel can take its place.
+  cutWheel(holder) {
+    const inv = this.tilt.matrixWorld.clone().invert(), v = new THREE.Vector3();
+    const inBox = (x, y, z) => x > 0.1 && x < 0.42 && y > 0.95 && y < 1.36 && z > 0.34 && z < 0.72;
+    holder.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.matrixWorld.clone().premultiply(inv), pos = o.geometry.attributes.position;
+      const idx = o.geometry.index ? Array.from(o.geometry.index.array) : [...Array(pos.count).keys()];
+      const keep = [];
+      for (let i = 0; i < idx.length; i += 3) {
+        let inside = 0;
+        for (let k = 0; k < 3; k++) { v.fromBufferAttribute(pos, idx[i + k]).applyMatrix4(m); if (inBox(v.x, v.y, v.z)) inside++; }
+        if (inside < 3) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+      }
+      if (keep.length !== idx.length) { o.geometry = o.geometry.clone(); o.geometry.setIndex(keep); }
+    });
   }
 
   buildMesh() {
@@ -116,12 +144,15 @@ export class GolfCart {
     add(new THREE.BoxGeometry(1.12, 0.03, 0.04), chrome, 0, 1.36, 0.64);
     // dash, steering column and wheel
     add(rbox(1.0, 0.12, 0.2, 0.04), dark, 0, 1.04, 0.6);
-    const col = add(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), dark, -0.28, 1.12, 0.48);
-    col.rotation.x = -0.65;
-    this.wheel = add(new THREE.TorusGeometry(0.17, 0.022, 8, 20), rubber, -0.28, 1.3, 0.34);
-    this.wheel.rotation.x = -0.95;
-    const spoke = mesh(new THREE.BoxGeometry(0.32, 0.02, 0.02), dark);
-    this.wheel.add(spoke);
+    const col = add(new THREE.CylinderGeometry(0.022, 0.026, 0.42, 8), dark, 0.26, 1.03, 0.66);
+    col.rotation.x = -0.75;
+    this.wheel = add(new THREE.TorusGeometry(0.17, 0.02, 8, 24), rubber, 0.26, 1.17, 0.52);
+    this.wheel.rotation.x = -0.9;
+    const spoke = mesh(new THREE.BoxGeometry(0.33, 0.022, 0.022), dark);
+    const spoke2 = mesh(new THREE.BoxGeometry(0.02, 0.15, 0.02), dark); spoke2.position.y = -0.075;
+    const hubC = mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 12), mat(0x2f8f4a)); hubC.rotation.x = Math.PI / 2;
+    this.wheel.add(spoke, spoke2, hubC);
+    this.steer = [col, this.wheel];
     // wheels: tyre, hubcap
     this.wheels = [];
     for (const [x, z] of [[-0.6, 0.78], [0.6, 0.78], [-0.6, -0.78], [0.6, -0.78]]) {
@@ -137,8 +168,19 @@ export class GolfCart {
     this.game.scene.add(g);
   }
 
+  // World position of a hand on the steering wheel rim (side 1 = left hand at ten, -1 = right at two).
+  wheelGrip(side, out) {
+    return this.wheel.localToWorld(out.set(side * 0.15, 0.08, 0));
+  }
+
+  // Where the driver's body centre is right now (follows the tilted mesh, so the camera never lags).
+  seatWorld(out) {
+    return this.tilt.localToWorld(out.set(SEAT.x, SEAT.y + 0.62, SEAT.z)).add(EYE_DOWN);
+  }
+
   interact() {
     const g = this.game, e = g.grabber.entity;
+    if (this.flipTarget && !e) { this.flipTarget = 0; sfx.boing?.(); return; } // heave it back onto its wheels
     if (e?.ragdoll) { if (!this.passenger) this.seat(e); return; }
     if (e?.body && e.type) { // anything else you're carrying goes in the back
       g.grabber.release();
@@ -148,7 +190,7 @@ export class GolfCart {
       sfx.drop();
       return;
     }
-    if (!this.driving) this.enter();
+    if (!this.driving && this.flip < 0.05) this.enter();
   }
 
   // A carried friend plops into the passenger seat, pinned there by the chest and hips.
@@ -222,6 +264,7 @@ export class GolfCart {
       this.honkCd -= dt;
       if (input.justPressed('Space') && this.honkCd <= 0) { sfx.honk(); this.honkCd = 0.5; }
     }
+    if (this.flipTarget) throttle = steer = 0; // upside down: wheels spin in the air
     const want = throttle > 0 ? MAX_FWD * g.mods.speed : throttle < 0 ? -MAX_REV : 0;
     const rate = Math.sign(want - this.speed) !== Math.sign(this.speed) && this.speed !== 0 ? BRAKE : ACCEL;
     this.speed += clamp(want - this.speed, -rate * dt, rate * dt);
@@ -234,7 +277,26 @@ export class GolfCart {
     if (this.driving) g.player.yaw += dyaw; // the camera turns with the cart
     // a passenger who gets picked up (or stands up) leaves the seat
     if (this.passenger && (this.game.grabber.entity === this.passenger || this.passenger.state !== 'ragdoll')) this.unseat();
-    this.wheel.rotation.z += (steer * 1.2 - this.wheel.rotation.z) * damp(10, dt);
+    this.wheel.rotation.z += (steer * 1.7 - this.wheel.rotation.z) * damp(8, dt);
+    // ran over a banana peel at speed: the cart flips right over, you and all
+    if (!this.flipTarget && Math.abs(this.speed) > 2.5) {
+      const b = this.body.position;
+      for (const it of g.items.list) {
+        if (it.type !== 'banana' || g.grabber.entity === it) continue;
+        const dx = it.body.position.x - b.x, dz = it.body.position.z - b.z;
+        const lz = dx * Math.sin(this.yaw) + dz * Math.cos(this.yaw), lx = dx * Math.cos(this.yaw) - dz * Math.sin(this.yaw);
+        if (Math.abs(lx) < 0.75 && Math.abs(lz) < 1.3 && Math.abs(it.body.position.y - b.y) < 1) {
+          this.flipTarget = 1; this.flipDir = Math.random() < 0.5 ? 1 : -1;
+          this.speed *= 0.3;
+          g.items.remove(it);
+          sfx.slip?.(); sfx.bonk?.();
+          g.animals.shout('WHOOPS!', b.x, b.y + 2.4, b.z, '#ffd34d');
+          g.player.shake = 1;
+          break;
+        }
+      }
+    }
+    this.flip += (this.flipTarget - this.flip) * damp(this.flipTarget ? 5 : 3, dt);
     for (const w of this.wheels) w.rotation.x += (this.speed * dt) / 0.24;
     if (this.driving && Math.abs(this.speed) > 0.5 && (this.hum = (this.hum || 0) - dt) <= 0) {
       this.hum = 0.11;
@@ -285,9 +347,11 @@ export class GolfCart {
     const h = (dx, dz) => heightAt(b.x + fx * dz + fz * dx, b.z + fz * dz - fx * dx);
     const pitch = Math.atan2(h(0, -0.9) - h(0, 0.9), 1.8);
     const roll = Math.atan2(h(0.6, 0) - h(-0.6, 0), 1.2);
-    this.root.position.set(b.x, b.y, b.z);
+    // flipped: roll over onto the roof, pivoting about the side so it doesn't sink into the ground
+    const f = this.flip, fr = f * Math.PI * (this.flipDir || 1);
+    this.root.position.set(b.x, b.y + Math.sin(f * Math.PI) * 0.9 + f * 2.15, b.z);
     this.root.rotation.set(0, this.yaw, 0);
-    this.tilt.rotation.set(pitch, 0, roll, 'XZY');
+    this.tilt.rotation.set(pitch * (1 - f), 0, roll * (1 - f) + fr, 'XZY');
   }
 }
 

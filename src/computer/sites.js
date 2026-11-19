@@ -23,7 +23,7 @@ const INDEX = [
 ];
 
 export function notFound(host) {
-  return `<div class="nf"><div class="big">404</div><h2>This site can't be reached</h2>
+  return `<div class="nf"><div class="big">404</div><h2>Uh oh. The hamsters powering this site fell asleep.</h2>
     <p><b>${esc(host)}</b> isn't on the Zoonet. Try <a data-href="zoogle.zoo">Zoogle</a>, or type a real address like <i>wikipedia.org</i>.</p></div>`;
 }
 
@@ -57,12 +57,12 @@ export const SITES = {
     title: () => 'ZooMart: Shop',
     render(u, { state, game }) {
       const names = Object.fromEntries(PRODUCTS.map((p) => [p.type, game.itemName(p.type)]));
-      return `<div class="zm"><h1>ZooMart</h1><p>Everything a zoo needs. Delivered to your front gate in 10–15 seconds by a very fast truck.</p>
+      return `<div class="zm"><h1>ZooMart</h1><p>Stuff! Stuff for zoos! Delivered to your gate in 10-15 seconds by a truck that does NOT obey speed limits.</p>
         <div class="zm-wrap">
           <div class="zm-grid">${PRODUCTS.map((p) => `<div class="zm-card"><div class="ic">${p.icon}</div><h3>${esc(names[p.type])}</h3><p>${esc(p.desc)}</p><button data-add="${p.type}">Add · ${money(p.price)}</button></div>`).join('')}</div>
-          <div class="zm-cart"><h3>Your cart</h3><div class="zm-rows"></div>
+          <div class="zm-cart"><h3>Your cart (ooh, shiny)</h3><div class="zm-rows"></div>
             <div class="zm-total"><span>Total</span><span class="zm-sum">$0</span></div>
-            <button class="zm-checkout" disabled>Checkout</button>
+            <button class="zm-checkout" disabled>BUY IT ALL!</button>
             <div class="zm-status hidden"></div>
             <small>Balance: <b class="zm-bal">${money(state.money)}</b></small>
           </div>
@@ -72,7 +72,7 @@ export const SITES = {
       const draw = () => {
         const rows = Object.entries(cart).filter(([, n]) => n > 0);
         const sum = rows.reduce((s, [t, n]) => s + PRODUCTS.find((p) => p.type === t).price * n, 0);
-        view.querySelector('.zm-rows').innerHTML = rows.length ? rows.map(([t, n]) => `<div class="row"><span>${esc(ctx.game.itemName(t))}</span><span><button data-dec="${t}">−</button> ${n} <button data-add="${t}">+</button></span></div>`).join('') : '<p>Empty. Go on, treat yourself.</p>';
+        view.querySelector('.zm-rows').innerHTML = rows.length ? rows.map(([t, n]) => `<div class="row"><span>${esc(ctx.game.itemName(t))}</span><span><button data-dec="${t}">−</button> ${n} <button data-add="${t}">+</button></span></div>`).join('') : '<p>Empty. Go on, treat yourself. You deserve it.</p>';
         view.querySelector('.zm-sum').textContent = money(sum);
         view.querySelector('.zm-checkout').disabled = !rows.length || !ctx.game.delivery.canOrder();
         return sum;
@@ -143,7 +143,7 @@ export const SITES = {
     title: () => 'ZooAds: Campaigns',
     render(u, { state }) {
       return `<div class="za">
-        <div class="za-hero"><h1>ZooAds</h1><p>Get butts in seats. Or on benches. Near animals.</p></div>
+        <div class="za-hero"><h1>ZooAds</h1><p>Get butts in seats. Or on benches. Near animals. Preferably not IN the animals.</p></div>
         <div class="za-stats">
           <div class="za-stat"><small>BALANCE</small><b class="za-bal">${money(state.money)}</b></div>
           <div class="za-stat"><small>HYPE</small><b class="za-hype">${Math.round(state.hype)}</b></div>
@@ -152,7 +152,7 @@ export const SITES = {
         <div class="za-grid">${CAMPAIGNS.map((c) => `
           <div class="za-card"><div class="ic">${c.icon}</div><h3>${c.name}</h3><p>${c.blurb}</p>
             <div class="row"><span class="cost">${money(c.cost)}</span><span class="hy">+${c.hype} hype</span></div>
-            <button data-buy="${c.id}">Launch campaign</button></div>`).join('')}
+            <button data-buy="${c.id}">Blast it everywhere!</button></div>`).join('')}
         </div></div>`;
     },
     bind(view, ctx) {
@@ -180,7 +180,7 @@ export const SITES = {
     color: '#6c3fd1',
     title: () => 'TicketHub: Dashboard',
     render(u, { state }) {
-      return `<div class="th"><h1>TicketHub</h1><p>Set the gate price. Cheap tickets bring crowds, expensive ones bring... fewer crowds.</p>
+      return `<div class="th"><h1>TicketHub</h1><p>Pick a ticket price. Cheap = crowds. Expensive = you and three very rich pigeons.</p>
         <div class="panel"><small>TICKET PRICE</small><div class="price">${money(state.ticketPrice)}</div>
           <input type="range" min="1" max="80" value="${state.ticketPrice}" class="th-range" /></div>
         <div class="panel grid">
@@ -189,7 +189,7 @@ export const SITES = {
           <div><small>VISITORS / MIN</small><b class="th-dem">${state.demand.toFixed(1)}</b></div>
           <div><small>HYPE</small><b class="th-hype">${Math.round(state.hype)}</b></div>
           <div><small>CLEANLINESS</small><b class="th-clean">${state.cleanliness}%</b></div>
-          <div><small>POOPS ON SITE</small><b class="th-poop">${state.poop}</b></div>
+          <div><small>POOPS ON THE LOOSE</small><b class="th-poop">${state.poop}</b></div>
         </div></div>`;
     },
     bind(view, { state }) {
@@ -213,7 +213,7 @@ export const SITES = {
     render(u, { state }) {
       const rows = state.log.slice(0, 25).map((e) => `<tr><td class="t">${new Date(e.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</td><td>${esc(e.label)}</td><td class="${e.amount >= 0 ? 'p' : 'n'}">${e.amount >= 0 ? '+' : '−'}${money(Math.abs(e.amount))}</td></tr>`).join('');
       return `<div class="bk"><h1>ZooBank</h1>
-        <div class="bk-card"><small>ZOO OPERATING ACCOUNT</small><div class="bal">${money(state.money)}</div><small>Account •••• 4242</small></div>
+        <div class="bk-card"><small>THE ZOO'S PIGGY BANK</small><div class="bal">${money(state.money)}</div><small>Account •••• 4242</small></div>
         <table>${rows}</table></div>`;
     },
     live(view, ctx, u) { view.innerHTML = `<div class="site">${this.render(u, ctx)}</div>`; },
@@ -235,5 +235,5 @@ const PAGES = {
   lion: { title: 'Lion', body: '<p>The lion is a large cat that spends up to 20 hours a day resting. Your lions are no exception.</p><p>Lions live in groups called <i>prides</i>. A group of zookeepers is called <i>understaffed</i>.</p>' },
   penguin: { title: 'Penguin', body: '<p>Penguins are flightless birds that are excellent swimmers. They waddle to save energy, and because it looks funny.</p>' },
   elephant: { title: 'Elephant', body: '<p>Elephants are the largest land animals. An adult can produce over 100 kg of dung per day.</p><p>Bring a bigger bucket.</p>' },
-  poop: { title: 'Poop', body: '<p><b>Zookeeping 101.</b> Animal waste lowers zoo cleanliness, and cleanliness drives ticket sales.</p><ol><li>Hold <b>left mouse</b> on the poop to grab it.</li><li>Carry it to the green dumpster behind ZOO HQ or any bin.</li><li>Drop it in. Feel accomplished.</li></ol><p>Do not run over it. You will slip.</p>' },
+  poop: { title: 'Poop', body: '<p><b>Zookeeping 101.</b> Animal waste lowers zoo cleanliness, and cleanliness drives ticket sales.</p><ol><li>Grab a trash bag (click the dumpster for a fresh one).</li><li>Click the poop while holding the bag. Ew. It goes in the bag.</li><li>Ten things and the bag is FULL. Chuck it in the dumpster for some recycling cash. Feel accomplished.</li></ol><p>Do not run over it. You will slip.</p>' },
 };

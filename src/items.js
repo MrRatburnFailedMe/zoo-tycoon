@@ -8,6 +8,7 @@ import { sfx } from './audio.js';
 import { canvasTexture } from './util/textures.js';
 import { modelInto } from './world/props.js';
 import { music } from './audio.js';
+import { billTexture, notesFor, cardTextures } from './money.js';
 
 const V = (x, y, z) => new CANNON.Vec3(x, y, z);
 const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -108,12 +109,53 @@ export const ITEMS = {
     },
   },
   trashbag: {
-    name: 'Trash Bag', mass: 2.5, trash: true, sound: 'soft', linearDamping: 0.1,
-    // trash bag by Jens Kull
+    // trash bag by Jens Kull. Hold it and click litter to fill it; it swells until it's full at 10.
+    name: 'Trash Bag', mass: 2.5, sound: 'soft', linearDamping: 0.1,
     build() {
       const g = new THREE.Group();
-      modelInto(g, 'assets/trashbag.glb', { height: 0.72, dy: -0.31, rough: 0.35, recolor: () => new THREE.Color(0x2b3036) });
-      return { group: g, shapes: [{ shape: new CANNON.Sphere(0.31) }] };
+      const inner = new THREE.Group();
+      inner.scale.setScalar(0.55);
+      g.add(inner);
+      modelInto(inner, 'assets/trashbag.glb', { height: 0.72, dy: -0.31, rough: 0.35, recolor: () => new THREE.Color(0x2b3036) });
+      return { group: g, shapes: [{ shape: new CANNON.Sphere(0.22) }], radius: 0.25 };
+    },
+  },
+  can: {
+    name: 'Soda can', mass: 0.1, trash: true, sound: 'metal',
+    build() {
+      const g = new THREE.Group();
+      const c = add(g, new THREE.CylinderGeometry(0.035, 0.035, 0.12, 10), [0xe2523c, 0x3f78c2, 0x2fb38a][Math.floor(Math.random() * 3)], 0, 0, 0, { metalness: 0.6, roughness: 0.3 });
+      c.scale.set(1, 0.8, 1); c.rotation.z = 0.2; // a bit crushed
+      add(g, new THREE.CylinderGeometry(0.03, 0.035, 0.012, 10), 0xcfd6db, 0, 0.05, 0, { metalness: 0.8, roughness: 0.3 });
+      return { group: g, shapes: [{ shape: new CANNON.Cylinder(0.035, 0.035, 0.1, 8) }], radius: 0.07 };
+    },
+  },
+  chips: {
+    name: 'Chip bag', mass: 0.05, trash: true, sound: 'soft',
+    build() {
+      const g = new THREE.Group();
+      const b = add(g, B(0.16, 0.03, 0.22), [0xffd34d, 0xff8a3d, 0x8e55a8][Math.floor(Math.random() * 3)], 0, 0, 0, { metalness: 0.4, roughness: 0.35 });
+      b.rotation.y = 0.3;
+      add(g, B(0.08, 0.032, 0.08), 0xffffff, 0, 0.002, 0.02).rotation.y = 0.3;
+      return { group: g, shapes: [{ shape: box(0.08, 0.02, 0.11) }], radius: 0.12 };
+    },
+  },
+  cup: {
+    name: 'Paper cup', mass: 0.05, trash: true, sound: 'soft',
+    build() {
+      const g = new THREE.Group();
+      add(g, new THREE.CylinderGeometry(0.045, 0.032, 0.12, 10), 0xffffff, 0, 0, 0);
+      add(g, new THREE.CylinderGeometry(0.046, 0.046, 0.03, 10), 0xe2523c, 0, 0.02, 0);
+      add(g, new THREE.CylinderGeometry(0.004, 0.004, 0.12, 4), 0x3f78c2, 0.01, 0.08, 0).rotation.z = 0.3; // straw
+      return { group: g, shapes: [{ shape: new CANNON.Cylinder(0.045, 0.032, 0.12, 8) }], radius: 0.07 };
+    },
+  },
+  paper: {
+    name: 'Scrunched paper', mass: 0.03, trash: true, sound: 'soft',
+    build() {
+      const g = new THREE.Group();
+      add(g, new THREE.IcosahedronGeometry(0.05, 0), 0xf3efe2, 0, 0, 0, { roughness: 1 });
+      return { group: g, shapes: [{ shape: new CANNON.Sphere(0.05) }], radius: 0.06 };
     },
   },
   poop: {
@@ -221,20 +263,20 @@ export const ITEMS = {
     },
   },
   cash: {
-    name: 'Cash', mass: 0.3, sound: 'soft',
-    // a fan of zoo dollars: one note per bill in the amount ($20 lion, $10 elephant, $5 penguin, $1 monkey)
-    build({ value = 20 } = {}) {
+    name: 'Cash', mass: 0.3, sound: 'soft', linearDamping: 0.4, angularDamping: 0.6,
+    // a little stack of zoo dollars, the same notes as in the register ($20 lion, $10 elephant, $5 penguin, $1 monkey)
+    build({ value = 20, notes } = {}) {
       const g = new THREE.Group();
-      const notes = [];
-      let left = value;
-      for (const d of [100, 50, 20, 10, 5, 1]) while (left >= d && notes.length < 6) { notes.push(d); left -= d; }
-      const COL = { 100: 0x9a6bd6, 50: 0xe2523c, 20: 0xf2a33a, 10: 0x6f8fb8, 5: 0x2fb3a8, 1: 0x6fbf5a };
-      notes.forEach((d, i) => {
-        const n = add(g, B(0.2, 0.008, 0.1), COL[d], 0, i * 0.009, 0);
-        n.rotation.y = (i - notes.length / 2) * 0.12;
-        add(g, B(0.05, 0.009, 0.05), 0xfff3c4, 0, i * 0.009 + 0.001, 0).rotation.y = n.rotation.y;
+      const list = notes || notesFor(value);
+      const edge = mat(0xf3efe2);
+      list.forEach((d, i) => {
+        const face = new THREE.MeshStandardMaterial({ map: billTexture(d), roughness: 0.8 });
+        const n = mesh(B(0.155, 0.003, 0.075), [edge, edge, face, face, edge, edge]);
+        n.position.set((i % 2) * 0.006 - 0.003, i * 0.0032, (i % 3) * 0.004 - 0.004);
+        n.rotation.y = (i - list.length / 2) * 0.06;
+        g.add(n);
       });
-      return { group: g, shapes: [{ shape: box(0.1, 0.025, 0.05) }], radius: 0.1 };
+      return { group: g, shapes: [{ shape: box(0.08, 0.012 + list.length * 0.0016, 0.04) }], radius: 0.09 };
     },
   },
   parcel: {
@@ -280,12 +322,34 @@ export const ITEMS = {
   },
   card: {
     name: 'Bank card', mass: 0.05, sound: 'soft', linearDamping: 0.4, angularDamping: 0.6,
-    build({ color = 0x3f78c2 } = {}) {
+    // a proper bank card: chip, contactless mark, embossed number and the owner's name; stripe on the back
+    build({ holder = 'A VISITOR', seed = Math.random() } = {}) {
       const g = new THREE.Group();
-      add(g, B(0.086, 0.004, 0.054), color, 0, 0, 0, { metalness: 0.3, roughness: 0.4 });
-      add(g, B(0.016, 0.005, 0.012), 0xd4b14a, -0.022, 0, 0.008, { metalness: 0.8, roughness: 0.3 }); // chip
-      add(g, B(0.086, 0.005, 0.01), 0x111111, 0, -0.0005, -0.018); // stripe
-      return { group: g, shapes: [{ shape: box(0.043, 0.004, 0.027) }], radius: 0.06 };
+      const t = cardTextures(holder, seed);
+      const edge = mat(0xe8e8e8, { roughness: 0.4 });
+      const front = new THREE.MeshStandardMaterial({ map: t.front, roughness: 0.35, metalness: 0.15 });
+      const back = new THREE.MeshStandardMaterial({ map: t.back, roughness: 0.4, metalness: 0.1 });
+      g.add(mesh(B(0.107, 0.002, 0.0675), [edge, edge, front, back, edge, edge]));
+      return { group: g, shapes: [{ shape: box(0.054, 0.004, 0.034) }], radius: 0.06 };
+    },
+  },
+  tickets: {
+    name: 'Tickets', mass: 0.1, sound: 'soft', linearDamping: 0.4, angularDamping: 0.6,
+    // a stack of tickets fresh from the printer, tied up with a red rubber band
+    build({ count = 2 } = {}) {
+      const g = new THREE.Group();
+      const face = new THREE.MeshStandardMaterial({ map: ticketTexture(), roughness: 0.6 });
+      const edge = mat(0xf3efe2);
+      for (let i = 0; i < count; i++) {
+        const t = mesh(B(0.24, 0.004, 0.12), [edge, edge, face, face, edge, edge]);
+        t.position.set((Math.random() - 0.5) * 0.008, i * 0.0045, (Math.random() - 0.5) * 0.006);
+        t.rotation.y = (Math.random() - 0.5) * 0.06;
+        g.add(t);
+      }
+      const h = count * 0.0045 + 0.004, band = mat(0xd9363e, { roughness: 0.5 });
+      for (const y of [h - 0.001, -0.003]) add(g, B(0.016, 0.0025, 0.124), 0xd9363e, 0.04, y, 0).material = band;
+      for (const z of [-0.0625, 0.0625]) add(g, B(0.016, h + 0.002, 0.0025), 0xd9363e, 0.04, h / 2 - 0.002, z).material = band;
+      return { group: g, shapes: [{ shape: box(0.12, Math.max(0.01, h / 2), 0.06) }], radius: 0.13 };
     },
   },
   feed: {
@@ -482,6 +546,8 @@ export function spawnStarterItems(game) {
   at('crate', DUMPSTER.x - 3.9, DUMPSTER.z + 1, 0.35);
   at('trashbag', DUMPSTER.x + 2, DUMPSTER.z + 1.2, 0.4);
   at('trashbag', DUMPSTER.x + 2.6, DUMPSTER.z + 0.6, 0.4);
+  // a bit of litter round the park to start with
+  for (const [x, z, t] of [[3, 22, 'can'], [-2, 30, 'cup'], [PLAZA.x + 4, PLAZA.z - 4, 'chips'], [6, 12, 'paper'], [-6, 18, 'can'], [2, 40, 'chips']]) at(t, x, z, 0.3);
   at('broom', OFFICE.x + OFFICE.w / 2 + 1.0, OFFICE.z + 2.6, 0.9, { yaw: 0.3 });
   at('banana', PLAZA.x + 6, PLAZA.z - 2, 0.2);
   at('banana', 1.5, 26, 0.2);

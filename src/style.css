@@ -496,39 +496,56 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #9fd4ee; fon
 .zm-status { margin-top: 10px; padding: 10px; border-radius: 12px; background: #fff7d6; font-weight: 700; }
 
 /* ---- cash register ---- */
-#register { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(15, 25, 20, 0.45); z-index: 40; font-family: Inter, system-ui, sans-serif; }
+#register { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(15, 25, 20, 0.55); z-index: 40; font-family: Inter, system-ui, sans-serif; user-select: none; }
 #register.open { display: flex; }
-.rg-box { width: min(880px, 96vw); background: #fff8e8; border: 4px solid #2b2440; border-radius: 18px; box-shadow: 0 10px 0 #2b2440, 0 20px 40px rgba(0,0,0,.35); overflow: hidden; }
-.rg-head { display: flex; justify-content: space-between; align-items: center; background: #ffd34d; border-bottom: 4px solid #2b2440; padding: 10px 16px; font: 800 22px "Baloo 2", system-ui; color: #2b2440; }
-.rg-x { border: 3px solid #2b2440; background: #fff; border-radius: 10px; font: 800 16px "Baloo 2"; width: 34px; height: 34px; cursor: pointer; }
-.rg-main { display: grid; grid-template-columns: 1fr 220px; gap: 16px; padding: 16px; }
-.rg-order { background: #fff; border: 3px solid #2b2440; border-radius: 12px; padding: 8px 12px; }
-.rg-line { display: flex; justify-content: space-between; font-size: 15px; padding: 3px 0; color: #2b2440; }
-.rg-line b { font: 800 18px "Baloo 2"; }
-.rg-line.due b { color: #e2523c; }
-.rg-drawer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; padding: 10px; background: #3a3f45; border-radius: 12px; box-shadow: inset 0 4px 0 rgba(0,0,0,.35); }
-.rg-slot { position: relative; background: #2b2f34; border-radius: 8px; padding: 6px 6px 10px; }
-.rg-stack { position: absolute; left: 10px; right: 10px; bottom: 4px; height: 5px; border-radius: 2px; background: var(--c); opacity: .6; box-shadow: 0 -3px 0 var(--c), 0 -6px 0 var(--c); }
-.rg-bill { position: relative; z-index: 1; width: 100%; aspect-ratio: 2 / 1.05; border: 3px solid var(--ink); border-radius: 8px; background: radial-gradient(circle at 50% 55%, rgba(255,255,255,.55) 0 26%, transparent 27%), repeating-linear-gradient(45deg, var(--c) 0 6px, color-mix(in srgb, var(--c) 85%, white) 6px 12px); color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s; }
-.rg-bill:hover { transform: translateY(-3px) rotate(-1deg); }
-.rg-bill:active { transform: translateY(1px); }
-.rg-bill svg { width: 42%; height: 80%; }
-.rg-denom { position: absolute; top: 2px; left: 5px; font: 800 15px "Baloo 2"; }
-.rg-denom.r { top: auto; left: auto; bottom: 1px; right: 5px; }
-.rg-bill small { position: absolute; bottom: 2px; left: 6px; font: 700 9px Inter; opacity: .8; text-transform: uppercase; letter-spacing: .05em; }
-.rg-traywrap { background: #e9dcc0; border: 3px dashed #8a6a45; border-radius: 12px; padding: 8px; min-height: 92px; }
-.rg-traylabel { font: 700 13px Inter; color: #5b3a1e; margin-bottom: 6px; display: flex; justify-content: space-between; }
-.rg-traysum { font: 800 16px "Baloo 2"; }
+.rg-box { width: min(980px, 96vw); max-height: 96vh; overflow: auto; background: #8a6a45; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 3px, transparent 3px 46px); border: 5px solid #2b2440; border-radius: 22px; box-shadow: 0 10px 0 #2b2440, 0 24px 50px rgba(0,0,0,.45); padding-bottom: 14px; }
+.rg-head { display: flex; gap: 14px; align-items: center; background: #ffd34d; border-bottom: 5px solid #2b2440; padding: 8px 16px; font: 800 26px "Baloo 2", system-ui; color: #2b2440; }
+.rg-head b { transform: rotate(-2deg); display: inline-block; }
+.rg-sub { flex: 1; font: 700 15px "Baloo 2"; color: #6b4a2e; }
+.rg-sub.warn { color: #e2523c; animation: rg-wob .3s; }
+.rg-x { border: 3px solid #2b2440; background: #fff; border-radius: 10px; font: 800 16px "Baloo 2"; width: 36px; height: 36px; cursor: pointer; }
+.rg-label { font: 800 15px "Baloo 2"; color: #fff3c4; margin-bottom: 6px; text-shadow: 0 2px 0 #2b2440; }
+.rg-label b { color: #b6ffb0; }
+.rg-hint { font: 600 12px Inter; opacity: .8; text-shadow: none; }
+.rg-top { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; padding: 14px 14px 0; }
+.rg-counter { background: #c9b28a; border: 4px solid #2b2440; border-radius: 14px; padding: 8px; min-height: 150px; box-shadow: inset 0 -6px 0 rgba(0,0,0,.12); }
+.rg-cash { display: flex; flex-wrap: wrap; gap: 6px; }
+.rg-empty { font: 700 14px "Baloo 2"; color: #5b3a1e; padding: 10px; }
+.rg-note { width: 104px; aspect-ratio: 200 / 96; cursor: grab; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); transition: transform .08s; }
+.rg-note:hover { transform: translateY(-3px) rotate(-2deg); }
+.rg-note svg { width: 100%; height: 100%; display: block; }
+.rg-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%, -50%) rotate(-6deg) scale(1.1); }
+.rg-screen { background: #1d2a1d; border: 5px solid #2b2440; border-radius: 14px; padding: 10px 12px; box-shadow: inset 0 0 0 3px #39553a; }
+.rg-lines div { display: flex; justify-content: space-between; font: 700 16px ui-monospace, Menlo, monospace; color: #8cff7a; padding: 2px 0; text-shadow: 0 0 6px rgba(140,255,122,.5); }
+.rg-lines b { font-weight: 800; }
+.rg-pad { background: #2b2440; border-radius: 14px; padding: 10px; }
+.rg-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rg-keys button { border: none; border-radius: 10px; padding: 8px 0; font: 800 20px "Baloo 2"; background: #f3e6c8; color: #2b2440; cursor: pointer; box-shadow: 0 4px 0 #a99a78; }
+.rg-keys button.on { background: #7cd05a; box-shadow: 0 4px 0 #3f8a2a; }
+.rg-keys button.clr { background: #ff8a7a; box-shadow: 0 4px 0 #b84a3a; }
+.rg-keys button:active, .rg-print:active { transform: translateY(3px); box-shadow: none; }
+.rg-print { width: 100%; margin-top: 10px; border: 4px solid #fff3c4; border-radius: 14px; padding: 10px; font: 900 24px "Baloo 2"; letter-spacing: .05em; background: #e2523c; color: #fff; cursor: pointer; box-shadow: 0 5px 0 #8a2a1e; }
+.rg-print:disabled { opacity: .45; cursor: default; }
+.rg-drawer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 14px 0; padding: 12px; background: #3a3f45; border: 5px solid #2b2440; border-radius: 16px; box-shadow: inset 0 8px 0 rgba(0,0,0,.35); }
+.rg-slot { position: relative; background: #24282c; border-radius: 10px; padding: 10px 8px 26px; min-height: 92px; display: flex; justify-content: center; cursor: pointer; box-shadow: inset 0 4px 0 rgba(0,0,0,.4); transition: background .1s; }
+.rg-slot:hover { background: #2f353a; }
+.rg-slot.nope { animation: rg-wob .35s; background: #6a2a2a; }
+.rg-slot.empty { opacity: .6; }
+.rg-pile .rg-note { width: 132px; cursor: pointer; filter: drop-shadow(0 4px 0 rgba(0,0,0,.5)) drop-shadow(0 8px 0 rgba(0,0,0,.25)); }
+.rg-count { position: absolute; bottom: 4px; right: 10px; font: 800 15px "Baloo 2"; color: #ffd34d; }
+.rg-traywrap { margin: 12px 14px 0; background: #e9dcc0; border: 4px dashed #5b3a1e; border-radius: 14px; padding: 8px 10px; min-height: 86px; }
+.rg-traywrap .rg-label { color: #5b3a1e; text-shadow: none; }
+.rg-traywrap .rg-label b { color: #2f8f4a; }
 .rg-tray { display: flex; flex-wrap: wrap; gap: 6px; }
-.rg-tray .rg-bill { width: 86px; }
-.rg-actions { display: flex; gap: 10px; margin-top: 12px; }
-.rg-actions button { flex: 1; border: 3px solid #2b2440; border-radius: 12px; padding: 10px; font: 800 17px "Baloo 2"; cursor: pointer; background: #fff; color: #2b2440; box-shadow: 0 4px 0 #2b2440; }
-.rg-actions .rg-give { background: #7cd05a; }
-.rg-actions button:disabled { opacity: .4; cursor: default; }
-.rg-calc { background: #2b2440; border-radius: 14px; padding: 12px; align-self: start; }
-.rg-disp { background: #b6e3a8; color: #1d3a16; font: 700 26px ui-monospace, Menlo, monospace; text-align: right; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; min-height: 30px; overflow: hidden; }
-.rg-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-.rg-keys button { border: none; border-radius: 8px; padding: 12px 0; font: 800 18px "Baloo 2"; background: #f3e6c8; color: #2b2440; cursor: pointer; box-shadow: 0 3px 0 #a99a78; }
-.rg-keys button.op { background: #ffd34d; box-shadow: 0 3px 0 #b8902a; }
-.rg-keys button:active { transform: translateY(2px); box-shadow: none; }
-@media (max-width: 640px) { .rg-main { grid-template-columns: 1fr; } }
+@keyframes rg-wob { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px) rotate(-2deg); } 75% { transform: translateX(6px) rotate(2deg); } }
+@media (max-width: 760px) { .rg-top { grid-template-columns: 1fr; } .rg-drawer { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---- ZooOS goes goofy: bubbly fonts, chunky outlines, slightly wonky windows ---- */
+#computer .screen, #computer .screen * { font-family: 'Comic Neue', 'Baloo 2', 'Comic Sans MS', cursive !important; }
+#computer .screen h1, #computer .screen h2, #computer .screen h3, #computer .screen b, #computer .screen .zg-logo,
+#computer .screen .brandmark, #computer .screen .start, #computer .screen small, #computer .screen button { font-family: 'Chewy', 'Baloo 2', 'Comic Sans MS', cursive !important; letter-spacing: .02em; }
+#computer .screen h1, #computer .screen h3 { transform: rotate(-1.2deg); display: inline-block; }
+#computer .window { border: 4px solid #2b2440 !important; border-radius: 18px !important; box-shadow: 0 8px 0 #2b2440, 0 18px 30px rgba(0,0,0,.35) !important; }
+#computer .window button { border-radius: 12px; }
+#computer .dicon span { font-size: 14px !important; font-weight: 700; }
+#computer .screen small { font-size: 12px !important; }

@@ -15,6 +15,7 @@ import { Items, spawnStarterItems, ITEMS } from './items.js';
 import { Player } from './player/player.js';
 import { Grabber } from './player/grab.js';
 import { Hands } from './player/hands.js';
+import { PlayerBody } from './player/body.js';
 import { Interactor } from './player/interact.js';
 import { Friend } from './characters/friend.js';
 import { LOOKS, loadCharacterModel } from './characters/character.js';
@@ -29,13 +30,15 @@ import { GolfCart } from './world/cart.js';
 import { DEFAULT_MODS } from './modDefaults.js';
 import { buildAnimals } from './world/animals.js';
 import { PlayerHealth } from './health.js';
+import { Trash } from './world/trash.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+let pixelRatio = Math.min(devicePixelRatio, 1.5);
+renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -57,7 +60,7 @@ const game = {
   uniforms: { time: { value: 0 } },
   mods: { ...DEFAULT_MODS },
   mode: 'menu', // menu | play | computer | resuming | feedback
-  version: '0.10.0',
+  version: '0.11.0',
   time: 0,
 };
 window.game = game;
@@ -80,6 +83,7 @@ buildBathroom(game);
 game.gate = buildGate(game);
 game.player = new Player(game, { x: GATE.x, z: GATE.z - 6, yaw: 0 });
 game.grabber = new Grabber(game);
+game.playerBody = new PlayerBody(game);
 game.hands = new Hands(LOOKS[0]);
 game.interact = new Interactor(game);
 const spot = game.office.spots.friend;
@@ -98,6 +102,7 @@ game.health = new PlayerHealth(game);
 await buildAnimals(game);
 game.visitors = new Visitors(game);
 game.delivery = new Delivery(game);
+game.trash = new Trash(game);
 game.cart = new GolfCart(game, CART_SPAWN.x, CART_SPAWN.z, Math.PI);
 
 // ---- Menu / pointer lock ----
@@ -153,12 +158,25 @@ addEventListener('resize', () => {
 });
 
 // ---- Main loop ----
+// Automatic resolution: if the frame rate sits low for a couple of seconds, render fewer pixels
+// (down to 0.75x); if it has lots of headroom, creep back up.
+let slow = 0, fast = 0;
+function autoScale(dt) {
+  if (game.mode !== 'play' || dt <= 0) return;
+  if (dt > 1 / 45) { slow += dt; fast = 0; } else if (dt < 1 / 58) { fast += dt; slow = 0; }
+  let next = pixelRatio;
+  if (slow > 1.5 && pixelRatio > 0.75) next = Math.max(0.75, pixelRatio - 0.25);
+  if (fast > 8 && pixelRatio < Math.min(devicePixelRatio, 1.5)) next = Math.min(devicePixelRatio, 1.5, pixelRatio + 0.25);
+  if (next !== pixelRatio) { pixelRatio = next; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight); slow = fast = 0; }
+}
+
 let last = performance.now();
 
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); // a stale timestamp must never run time backwards
   last = now;
+  autoScale(dt);
   const { player, grabber } = game;
   const running = game.mode !== 'menu' && game.mode !== 'feedback';
 
@@ -168,7 +186,7 @@ function frame(now) {
     game.uniforms.time.value = game.time;
     if (game.mode === 'play') {
       player.update(dt);
-      if (!player.driving || player.driving.seat) { // you can work the desk from the gate chair
+      if (!player.driving || player.driving.seat === true) { // you can work the desk from the gate chair
         game.interact.update();
         grabber.update();
       }
@@ -176,7 +194,7 @@ function frame(now) {
     game.cart.update(game.mode === 'play' ? dt : 0);
     for (const f of game.friends) f.preStep();
 
-    world.step(1 / 60, sdt, 8);
+    world.step(1 / 60, sdt, 3);
 
     for (const l of game.links) {
       l.object.position.copy(l.body.interpolatedPosition);
@@ -185,11 +203,13 @@ function frame(now) {
     game.cart.sync();
     game.glass.update(dt);
     game.items.update();
+    game.trash.update();
     game.gate.update(dt);
     game.visitors.update(sdt, game.time);
     game.delivery.update(sdt);
     for (const f of game.friends) f.update(dt, game.time);
     game.office.update();
+    game.bathroomDoors?.update(dt);
     game.zoo.update(game.time, dt);
     game.exhibits.update(game.time, dt);
     game.animals.update(game.time, sdt);
@@ -201,11 +221,13 @@ function frame(now) {
   if (game.mode === 'computer') game.computer.updateCamera(dt);
   else player.postStep(running ? dt : 0);
   game.env.update(dt);
+  game.playerBody.update(running ? dt : 0);
   game.modMenu?.update(dt);
 
   game.hands.update(dt, {
-    visible: game.mods.hands && (!player.driving || player.driving.seat) && (game.mode === 'play' || game.mode === 'resuming'),
+    visible: game.mods.hands && (!player.driving || player.driving.seat === true) && (game.mode === 'play' || game.mode === 'resuming'),
     holding: !!grabber.held && game.mode === 'play',
+    grip: game.mode === 'play' ? grabber.grip : null,
     heavy: grabber.heavy,
     charge: grabber.charging ? grabber.charge : 0,
     bob: player.bobPhase,

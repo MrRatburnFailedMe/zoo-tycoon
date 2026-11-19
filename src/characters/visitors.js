@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { G, MASK } from '../physics.js';
 import { createCharacter } from './character.js';
+import { Ragdoll } from './ragdoll.js';
 import { heightAt } from '../world/terrain.js';
 import { GATE, PLAZA, TURNSTILES, ENCLOSURES, PENGUIN, ELEPHANT, GORILLA, DEN, HIPPO } from '../world/layout.js';
 import { angleDiff } from '../util/math.js';
@@ -77,11 +78,14 @@ class Visitor {
     this.game = game;
     this.mgr = mgr;
     this.name = pick(NAMES);
+    this.fullName = `${this.name} ${pick(['Banana', 'Whiskers', 'McFluff', 'Hoofington', 'Stripes', 'Pawson', 'Noodle', 'Wobble', 'Parrot', 'Snout'])}`;
+    this.cardSeed = Math.random();
     this.label = `Visitor ${this.name}`;
-    this.interactLabel = 'Hand ticket';
+
     this.char = createCharacter({ shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKIN), hair: pick(HAIR), socks: 0x333333 });
     this.root = this.char.root;
     const s = 0.88 + Math.random() * 0.2;
+    this.scale = s;
     this.root.scale.setScalar(s);
     this.root.traverse((o) => { if (o.isMesh) o.userData.entity = this; });
     this.bubble = orderBubble();
@@ -93,7 +97,9 @@ class Visitor {
     this.body = new CANNON.Body({ type: CANNON.Body.KINEMATIC, mass: 0, collisionFilterGroup: G.KINEMATIC, collisionFilterMask: MASK.KINEMATIC });
     this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.85 * s, 0.2)), new CANNON.Vec3(0, 0.85 * s, 0));
     this.body.addEventListener('collide', (e) => {
-      if (e.body.mass > 0.2 && e.body !== game.player.body && Math.abs(e.contact.getImpactVelocityAlongNormal()) > 4) this.bonked = true;
+      const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
+      const isPlayer = e.body === game.player.body;
+      if ((isPlayer && v > 5.5) || (!isPlayer && e.body.mass > 0.2 && v > 4)) { this.bonked = true; this.hitBy = e.body; }
     });
     game.world.addBody(this.body);
     this.pos = new THREE.Vector3(SPAWN.x + (Math.random() - 0.5), 0, SPAWN.z);
@@ -114,6 +120,60 @@ class Visitor {
   }
 
   get total() { return this.n * this.game.state.ticketPrice; }
+  get interactLabel() {
+    const h = this.game.grabber.entity;
+    if (h?.type === 'ticket' || h?.type === 'tickets') return 'Hand over tickets';
+    if (h?.type === 'card') return h.payer === this ? 'Give the card back' : 'Not their card';
+    if (h?.type === 'cash' && h.isChange) return 'Give change';
+    return 'Talk';
+  }
+
+  // ---- ragdoll: grab them, throw them, bowl them over (they get back up, grumbling) ----
+  getGrabBody(object, point) {
+    if (!this.ragdoll) this.ragdollify(new CANNON.Vec3(0, 1, 0));
+    return point ? this.ragdoll.nearest(point) : this.ragdoll.torso;
+  }
+
+  onThrow(dir, speed) { this.ragdoll?.push(dir, speed * 0.8); }
+
+  ragdollify(velocity) {
+    if (this.ragdoll) return;
+    this.downTime = 0;
+    this.root.scale.setScalar(1);
+    this.root.updateMatrixWorld(true);
+    this.char.state.paused = true;
+    this.bubble.visible = false;
+    this.ragdoll = new Ragdoll(this.game, this.char);
+    this.ragdoll.spawn(this.root.matrixWorld, this.root.quaternion, velocity);
+    this.game.world.removeBody(this.body);
+    sfx.oof?.();
+  }
+
+  standUp() {
+    const g = this.game, t = this.ragdoll.torso.position;
+    let x = t.x, z = t.z;
+    if (t.y < -30 || Math.hypot(x, z) > 135) { x = this.pos.x; z = this.pos.z; }
+    if (g.grabber.entity === this) g.grabber.release();
+    this.ragdoll.despawn();
+    this.ragdoll = null;
+    this.char.resetPose();
+    this.char.state.paused = false;
+    this.root.scale.setScalar(this.scale);
+    this.pos.set(x, heightAt(x, z), z);
+    g.world.addBody(this.body);
+    this.say(pick(['Hey!!', 'Rude!', 'I want a refund!', 'My back...', 'Whoa!']), '#ffb0a0');
+    g.state.addHype(-0.4);
+    sfx.pop?.();
+  }
+
+  updateRagdoll(dt) {
+    this.ragdoll.clampSpeed();
+    this.ragdoll.sync();
+    this.downTime += dt;
+    const held = this.game.grabber.entity === this, torso = this.ragdoll.torso;
+    const lost = torso.position.y < heightAt(torso.position.x, torso.position.z) - 2 || torso.position.y < -30;
+    if (lost || (this.downTime > 4 && !held && torso.velocity.length() < 1.2)) this.standUp();
+  }
   get awaitingPayment() { return this.state === 'queue' && !this.paid; }
   // cash they hand over: sometimes exact, usually a round note or two over
   pickTender() {
@@ -122,18 +182,48 @@ class Visitor {
     return Math.random() < 0.15 ? t : pick(opts.slice(1, 4));
   }
 
-  // E on the visitor at the window while holding a ticket.
+  // Click the visitor at the window while holding their tickets, their card or their change.
   interact() {
     const g = this.game, held = g.grabber.entity;
     if (this.state !== 'queue' || this.mgr.queue[0] !== this) { this.say(this.state === 'queue' ? 'Wait your turn!' : 'Hi!'); return; }
-    if (held?.type !== 'ticket') { this.say(this.got < this.n ? `${this.n - this.got} ticket${this.n - this.got > 1 ? 's' : ''}, please!` : 'Just need to pay!'); return; }
-    g.grabber.release();
-    g.items.remove(held);
-    this.takeTicket();
+    if (held?.type === 'ticket' || held?.type === 'tickets') {
+      g.grabber.release();
+      g.items.remove(held);
+      this.takeTicket(held.count || 1);
+      return;
+    }
+    if (held?.type === 'card') {
+      if (held.payer !== this) { this.say('That\'s not my card!'); return; }
+      g.grabber.release();
+      g.items.remove(held);
+      this.cardBack = true;
+      this.say(this.paid ? 'Thanks!' : 'Uh, you didn\'t swipe it?');
+      if (!this.paid) { this.handed = false; } // they'll hand it over again
+      this.checkDone();
+      return;
+    }
+    if (held?.type === 'cash' && held.isChange) {
+      g.grabber.release();
+      g.items.remove(held);
+      this.takeChange(held.value);
+      return;
+    }
+    this.say(this.got < this.n ? `${this.n - this.got} ticket${this.n - this.got > 1 ? 's' : ''}, please!` : !this.paid ? 'I need to pay!' : this.byCard && !this.cardBack ? 'My card please!' : this.changeDue > 0 && !this.changeGiven ? `My change! $${this.changeDue}` : 'Bye!');
   }
 
-  takeTicket() {
-    this.got++;
+  takeChange(given) {
+    const g = this.game, due = Math.max(0, this.changeDue || 0);
+    g.state.changeError(due - given);
+    const diff = given - due;
+    if (diff === 0) { this.say('Perfect, thanks!', '#b6ffb0'); g.state.addHype(0.4); }
+    else if (diff > 0) this.say(`Ooh, $${diff} extra!`, '#ffd34d');
+    else { this.say(`Hey! I'm $${-diff} short!`, '#ffb0a0'); g.state.addHype(-1); }
+    this.changeGiven = true;
+    this.checkDone();
+  }
+
+  takeTicket(n = 1) {
+    this.got += n;
     sfx.click();
     if (this.got > this.n) this.say('I already have mine!');
     this.refresh();
@@ -151,6 +241,8 @@ class Visitor {
 
   checkDone() {
     if (!this.paid || this.got < this.n) return;
+    if (this.byCard && !this.cardBack) { this.say('Can I have my card back?'); return; }
+    if ((this.changeDue || 0) > 0 && !this.changeGiven) { this.say(`And my change! $${this.changeDue}`); return; }
     this.mgr.admitted(this);
     this.state = 'pay';
     this.wait = 1.1;
@@ -178,10 +270,13 @@ class Visitor {
   update(dt, t) {
     const g = this.game, mgr = this.mgr;
     this.moving = false;
+    if (this.ragdoll) { this.updateRagdoll(dt); return; }
     if (this.bonked) {
       this.bonked = false;
       this.say(pick(['OW!', 'HEY!', 'Rude!!', 'My head!']), '#ffb0a0');
       g.state.addHype(-0.5);
+      const v = this.hitBy?.velocity;
+      if (v) { this.ragdollify(new CANNON.Vec3(v.x * 0.6, v.y * 0.6 + 2.5, v.z * 0.6)); return; }
     }
     switch (this.state) {
       case 'arrive':
@@ -248,7 +343,7 @@ class Visitor {
         const e = this.target;
         this.yaw += angleDiff(Math.atan2(e.x - this.pos.x, e.z - this.pos.z), this.yaw) * Math.min(1, dt * 3);
         if ((this.wait -= dt) <= 0) {
-          if (Math.random() < 0.18) g.items.spawn(Math.random() < 0.5 ? 'banana' : 'trashbag', this.pos.x + 0.4, this.pos.y + 0.3, this.pos.z + 0.4); // litterbug
+          if (Math.random() < 0.18) g.items.spawn(['banana', 'can', 'cup', 'chips', 'paper'][Math.floor(Math.random() * 5)], this.pos.x + 0.4, this.pos.y + 0.3, this.pos.z + 0.4); // litterbug
           this.nextExhibit();
         }
         break;
@@ -270,11 +365,11 @@ class Visitor {
   checkDroppedTicket() {
     const g = this.game;
     for (const it of g.items.list) {
-      if (it.type !== 'ticket' || g.grabber.entity === it) continue;
+      if ((it.type !== 'ticket' && it.type !== 'tickets') || g.grabber.entity === it) continue;
       const p = it.body.position;
       if (Math.hypot(p.x - this.pos.x, p.z - this.pos.z) < 1.1 && p.y > this.pos.y + 0.6 && p.y < this.pos.y + 2.2) {
         g.items.remove(it);
-        this.takeTicket();
+        this.takeTicket(it.count || 1);
         return;
       }
     }
@@ -325,6 +420,7 @@ export class Visitors {
 
   remove(v) {
     const g = this.game;
+    if (v.ragdoll) { if (g.grabber.entity === v) g.grabber.release(); v.ragdoll.despawn(); v.ragdoll = null; }
     g.scene.remove(v.root);
     g.world.removeBody(v.body);
     g.pickables.splice(g.pickables.indexOf(v.root), 1);

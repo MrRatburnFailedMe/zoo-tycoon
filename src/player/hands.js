@@ -5,7 +5,7 @@ import { loadGLB } from '../util/glb.js';
 
 const FWD = new THREE.Vector3(0, 0, -1);
 const HAND_LEN = 0.12;
-const MAX_LEN = 0.6; // arm length cap
+const MAX_LEN = 0.9; // arm length cap
 
 // First-person arms, rendered in their own pass on top of the world so they never clip into walls.
 // When carrying something both hands come up and hold it in front of you. Arms never stretch.
@@ -47,7 +47,7 @@ export class Hands {
       const k = 0.2 / (b.max.y - b.min.y);
       geo.scale(k, k, k);
       geo.rotateX(-Math.PI / 2); // fingers forward (-Z), palm up
-      geo.rotateZ(Math.PI); // palm down
+      geo.rotateZ(a.side * (Math.PI / 2 + 0.45)); // palm turned in toward the middle and a bit down, thumb up
       geo.computeVertexNormals();
       const m = new THREE.Mesh(geo, skin);
       m.renderOrder = 2;
@@ -89,11 +89,13 @@ export class Hands {
     this.root.add(pivot);
     const rest = new THREE.Vector3(0.3 * side, -0.4, 0.05);
     pivot.position.copy(rest);
-    const restTarget = new THREE.Vector3(0.2 * side, -0.24, -0.5);
+    const restTarget = new THREE.Vector3(0.21 * side, -0.27, -0.46);
     return { pivot, sleeve, hand, fingers, cuff, side, rest, restTarget, cur: restTarget.clone(), vel: new THREE.Vector3(), curl: 0.3 };
   }
 
   punch() { this.punchT = 0.22; }
+  // reach out toward a camera-space point (picking something up)
+  reach(p) { this.reachT = 0.2; this.reachAt = p.clone().clampLength(0, 0.7); if (this.reachAt.z > -0.3) this.reachAt.z = -0.3; }
   throwAnim() { this.throwT = 0.3; }
 
   resize(aspect) { this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); }
@@ -105,6 +107,7 @@ export class Hands {
     if (this.camera.fov !== s.fov) { this.camera.fov = s.fov; this.camera.updateProjectionMatrix(); }
     this.punchT = Math.max(0, this.punchT - dt);
     this.throwT = Math.max(0, this.throwT - dt);
+    this.reachT = Math.max(0, (this.reachT || 0) - dt);
 
     // Weapon-style sway: lag behind mouse movement + walk bob.
     this.sway.x += (-s.lookDX * 0.0004 - this.sway.x) * damp(10, dt);
@@ -118,19 +121,24 @@ export class Hands {
     for (const a of this.arms) {
       const t = this.tmp;
       const holding = s.holding;
-      if (holding) {
-        // both hands out front, as if carrying a box (wider and lower when it's heavy)
-        t.set(a.side * (s.heavy ? 0.22 : 0.16), s.heavy ? -0.26 : -0.2, -0.5);
-        t.y += Math.sin(performance.now() * 0.004) * 0.004;
+      const gp = s.grip ? (a.side === 1 ? s.grip.right : s.grip.left) : null;
+      if (gp) {
+        // this hand is gripping the held thing
+        t.copy(gp);
+        t.y += Math.sin(performance.now() * 0.004) * 0.003;
+      } else if (holding) {
+        // the free hand hangs low and out of the way
+        t.set(a.side * 0.28, -0.42, -0.35);
       } else {
         t.copy(a.restTarget);
         t.y += Math.sin(performance.now() * 0.0015 + a.side) * 0.006;
       }
+      if (a.side === 1 && this.reachT > 0) t.copy(this.reachAt);
       if (holding && s.charge > 0) {
         // winding up a throw: the throwing arm pulls back, and trembles once it's at full power
         const c = s.charge;
-        if (a.side === 1) t.set(0.16 + c * 0.07, -0.2 + c * 0.09, -0.5 + c * 0.16);
-        else t.set(-0.16 + c * 0.06, -0.2 + c * 0.03, -0.5 + c * 0.08);
+        if (a.side === 1) t.add(new THREE.Vector3(c * 0.08, c * 0.1, c * 0.2));
+        else t.add(new THREE.Vector3(c * 0.06, c * 0.03, c * 0.08));
         if (c >= 1) { const j = 0.018; t.x += (Math.random() - 0.5) * j; t.y += (Math.random() - 0.5) * j; t.z += (Math.random() - 0.5) * j; }
       }
       if (a.side === 1 && this.punchT > 0) t.set(0.06, -0.12, -0.85);
@@ -146,7 +154,7 @@ export class Hands {
       a.pivot.quaternion.setFromUnitVectors(FWD, dir.normalize());
       a.sleeve.scale.z = len - HAND_LEN;
       a.hand.position.z = -(len - HAND_LEN);
-      const curl = holding ? 1.3 : this.punchT > 0 ? 1.5 : 0.25;
+      const curl = gp ? 1.3 : this.punchT > 0 ? 1.5 : 0.25;
       a.curl += (curl - a.curl) * damp(14, dt);
       a.fingers.rotation.x = -a.curl;
       if (a.model) a.model.rotation.x = -a.curl * 0.35; // grip: hand tips down a little

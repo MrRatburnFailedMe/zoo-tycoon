@@ -80,6 +80,12 @@ export const sfx = {
   screech: (v = 1) => { for (let i = 0; i < 3; i++) tone({ f: 900 + i * 120, f2: 1500, type: 'square', dur: 0.09, vol: 0.05 * v, delay: i * 0.11 }); },
   splash: (v = 1) => noise({ dur: 0.5, vol: 0.18 * v, f: 1600, f2: 300 }),
   // held-animal panic
+  screech: () => { // monkey screech: two quick wobbly squeals
+    for (let i = 0; i < 2; i++) tone({ f: 1500 + Math.random() * 300, f2: 2300 + Math.random() * 400, type: 'sawtooth', dur: 0.16, vol: 0.06, delay: i * 0.17 });
+    noise({ dur: 0.25, vol: 0.05, f: 3000, type: 'bandpass', q: 4 });
+  },
+  dumpster: () => { noise({ dur: 0.35, vol: 0.4, f: 400, f2: 120, type: 'lowpass' }); tone({ f: 110, f2: 60, type: 'square', dur: 0.25, vol: 0.12 }); },
+  rustle: () => noise({ dur: 0.16, vol: 0.18, f: 1800, f2: 900, type: 'bandpass', q: 1.5 }),
   slap: () => { noise({ dur: 0.07, vol: 0.5, f: 2500, f2: 1200, type: 'highpass' }); tone({ f: 260, f2: 90, type: 'square', dur: 0.08, vol: 0.12 }); },
   scream: (v = 1) => {
     const p = 0.85 + Math.random() * 0.4;

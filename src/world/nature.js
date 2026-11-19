@@ -26,14 +26,14 @@ export function pineTier(y, radius, droop, color, points = 9, jag = 0.55) {
 }
 
 function pineTree() {
-  const parts = [prep(new THREE.CylinderGeometry(0.1, 0.24, 6.2, 6), TRUNK, { pos: [0, 3.1, 0] })];
+  const parts = [prep(new THREE.CylinderGeometry(0.08, 0.24, 6.8, 6), TRUNK, { pos: [0, 3.4, 0] })];
   const tiers = 6;
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1);
     const col = new THREE.Color(0x34502f).lerp(new THREE.Color(0x587a40), t * 0.7 + (i % 2) * 0.12).getHex();
     parts.push(pineTier(1.6 + i * 0.95, 2.3 * (1 - t * 0.78) + 0.25, 0.75 - t * 0.25, col, 8 + (i % 2)));
   }
-  parts.push(prep(new THREE.ConeGeometry(0.28, 1.1, 5), 0x5b7d42, { pos: [0, 7.2, 0] }));
+  parts.push(prep(new THREE.ConeGeometry(0.34, 1.2, 5), 0x5b7d42, { pos: [0, 6.95, 0] }));
   return merge(parts);
 }
 
@@ -83,7 +83,7 @@ export function scatter(game, geo, placements, { collider = null, material = lea
 
 export function buildNature(game) {
   const rand = mulberry32(1234);
-  const lists = { round: [], pine: [], bush: [], rock: [] };
+  const lists = { round: [], pine: [], bush: [], rock: [], farPine: [], farRound: [] };
 
   // Canopy footprint per tree kind, so trees never grow into each other.
   const CANOPY = { pine: 2.2, round: 2.4, bush: 1.1 };
@@ -114,7 +114,7 @@ export function buildNature(game) {
     const a = rand() * Math.PI * 2;
     const r = 145 + rand() * 160;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const list = rand() < 0.8 ? lists.pine : lists.round;
+    const list = rand() < 0.8 ? lists.farPine : lists.farRound;
     const s = 1 + rand() * 1.1, cr = CANOPY.pine * s * 0.8;
     if (!fits(x, z, cr)) continue;
     taken.push({ x, z, r: cr });
@@ -141,6 +141,8 @@ export function buildNature(game) {
   scatter(game, roundTree(), lists.round, { collider: trunkCollider(1) });
   scatter(game, pineTree(), lists.pine, { collider: trunkCollider(0.8) });
   scatter(game, bush(), lists.bush);
+  // the far forest is outside the shadow camera anyway: don't draw it into the shadow map
+  for (const [geo, l] of [[pineTree(), lists.farPine], [roundTree(), lists.farRound]]) { const f = scatter(game, geo, l); if (f) f.castShadow = false; }
   scatter(game, rockGeo(), lists.rock, { collider: (pl) => { if (pl.s > 0.5) staticBody(game, new CANNON.Sphere(pl.s * 0.85), pl.x, pl.y + 0.1, pl.z); } });
 
   buildGrass(game, rand);
@@ -190,7 +192,7 @@ export function swayMaterial(game, strength = 1) {
 // near paths, straw-coloured in the lion savanna.
 function buildGrass(game, rand) {
   const geo = clumpGeo(rand, 9, 0.75, 0.075);
-  const N = 48000;
+  const N = 26000;
   const inst = new THREE.InstancedMesh(geo, swayMaterial(game), N);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const tint = new THREE.Color();
